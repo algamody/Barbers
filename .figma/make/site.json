@@ -1,0 +1,10 @@
+{
+  "description": "This web application promotes mental well-being by offering personalized self-care routines, mindfulness exercises, and progress tracking for users seeking balance.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

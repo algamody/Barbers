@@ -1,0 +1,206 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
+
+@theme {
+  --font-display: 'Instrument Serif', Georgia, serif;
+  --font-body: 'Cairo', 'Outfit', system-ui, sans-serif;
+  --font-arabic: 'Cairo', system-ui, sans-serif;
+  --color-primary: #e8722a;
+  --color-primary-hover: #d2621e;
+}
+
+[dir="rtl"], [lang="ar"], :root[lang="ar"], [dir="rtl"] * {
+  font-family: 'Cairo', system-ui, sans-serif !important;
+}
+
+:root {
+  --background: #f5f5f5;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --card-alt: #eeeeee;
+  --primary: #e8722a;
+  --primary-foreground: #ffffff;
+  --secondary: #f0ece4;
+  --secondary-foreground: #1c1612;
+  --muted: #f5f5f5;
+  --muted-foreground: #888888;
+  --border: #e0e0e0;
+  --input: #eeeeee;
+  --ring: #e8722a;
+  --destructive: #c83020;
+  --destructive-foreground: #ffffff;
+  --success: #376640;
+  --success-foreground: #ffffff;
+  --success-bg: #e6f0e8;
+  --radius: 1rem;
+}
+
+.dark, [data-theme="dark"] {
+  --background: #0f0c0a;
+  --foreground: #f5f0ea;
+  --card: #1c1612;
+  --card-foreground: #f5f0ea;
+  --card-alt: #150f0b;
+  --primary: #e8722a;
+  --primary-foreground: #0f0e0d;
+  --secondary: #251e18;
+  --secondary-foreground: #f5f0ea;
+  --muted: #1c1612;
+  --muted-foreground: #6e6158;
+  --border: #2e2218;
+  --input: #1c1612;
+  --ring: #e8722a;
+  --destructive: #d94030;
+  --destructive-foreground: #ffffff;
+  --success: #4a8a5a;
+  --success-foreground: #ffffff;
+  --success-bg: #1a2e20;
+}
+
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  font-family: var(--font-body);
+  background: #0a0908;
+}
+
+/* Gentle directional motion when changing language or screens */
+@keyframes slideInFromRight {
+  0% {
+    opacity: 0.15;
+    transform: translateX(16px) scale(0.992);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes slideInFromLeft {
+  0% {
+    opacity: 0.15;
+    transform: translateX(-16px) scale(0.992);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes subtleFadeUp {
+  0% {
+    opacity: 0.2;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.motion-lang-ar {
+  animation: slideInFromRight 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.motion-lang-en {
+  animation: slideInFromLeft 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.motion-screen {
+  animation: subtleFadeUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* View Transition API polish */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.28s;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Bottom sheet animations */
+@keyframes sheetSlideUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes sheetSlideDown {
+  0% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes backdropFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes backdropFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes selectionPulse {
+  0% {
+    transform: scale(0.96);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.animate-sheet-enter {
+  animation: sheetSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-sheet-exit {
+  animation: sheetSlideDown 0.26s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.animate-backdrop-enter {
+  animation: backdropFadeIn 0.25s ease-out forwards;
+}
+
+.animate-backdrop-exit {
+  animation: backdropFadeOut 0.25s ease-in forwards;
+}
+
+.animate-select-pulse {
+  animation: selectionPulse 0.22s ease-out forwards;
+}
+
