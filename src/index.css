@@ -193,14 +193,44 @@ body {
 }
 
 .animate-backdrop-enter {
-  animation: backdropFadeIn 0.25s ease-out forwards;
+  animation: backdropFadeIn 0.15s ease-out forwards;
 }
 
 .animate-backdrop-exit {
-  animation: backdropFadeOut 0.25s ease-in forwards;
+  animation: backdropFadeOut 0.12s ease-in forwards;
 }
 
 .animate-select-pulse {
   animation: selectionPulse 0.22s ease-out forwards;
+}
+
+@keyframes modalScaleIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes modalScaleOut {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+.animate-modal-enter {
+  animation: modalScaleIn 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-modal-exit {
+  animation: modalScaleOut 0.12s cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 

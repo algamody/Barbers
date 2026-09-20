@@ -222,22 +222,31 @@ export default function Home({
                     "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)",
                 }}
               />
-              <div className="absolute top-3 right-3">
-                <Badge
-                  variant={shop.isOpen ? "success" : "destructive"}
-                  size="sm"
-                  className="bg-black/60 backdrop-blur-md gap-1 font-semibold"
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      shop.isOpen ? "bg-emerald-400" : "bg-red-400"
-                    }`}
-                  />
-                  {shop.isOpen ? T.open : T.closed}
-                </Badge>
-              </div>
+              {shop.isOpen && (
+                <div className="absolute top-3 right-3">
+                  <Badge
+                    variant="success"
+                    size="sm"
+                    className="bg-black/60 backdrop-blur-md gap-1 font-semibold"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    {T.open}
+                  </Badge>
+                </div>
+              )}
+              {!shop.isOpen && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-[1.5px] flex items-center justify-center z-10 pointer-events-none">
+                  <Badge
+                    variant="destructive"
+                    className="bg-black/80 border border-red-500/60 text-white text-sm font-bold px-4 py-1.5 shadow-2xl backdrop-blur-md gap-2"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    <span>{T.closed}</span>
+                  </Badge>
+                </div>
+              )}
               {isCommunityStatusActive(shop) && (
-                <div className="absolute top-3 left-3">
+                <div className="absolute top-3 left-3 z-20">
                   <Badge
                     variant="subtle"
                     size="sm"

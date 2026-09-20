@@ -372,7 +372,7 @@ export default function ShopDetail({
             />
             {currentIsOpen
               ? T.openWithWaiting(currentWaitingCount)
-              : T.closedNow}
+              : T.closed}
           </Badge>
 
           {/* Community status badge with time (HH:MM) - disappears next day */}

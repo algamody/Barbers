@@ -1,12 +1,14 @@
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
 import {
   Button,
   Card,
   Avatar,
+  AvatarImage,
   AvatarFallback,
   Textarea,
+  Input,
   Badge,
   BottomSheet,
 } from "@/components/ui"
@@ -27,7 +29,12 @@ import {
   IconHistory,
   IconCheck,
   IconMessageDots,
+  IconCamera,
+  IconPhone,
+  IconMail,
+  IconTrash,
 } from "@tabler/icons-react"
+import ChangePhoneScreen from "./ChangePhoneScreen"
 
 interface Props {
   theme: Theme
@@ -90,6 +97,72 @@ export default function Profile({
   const [showLangDrawer, setShowLangDrawer] = useState(false)
   const [pendingLang, setPendingLang] = useState<Lang | null>(null)
 
+  // User Profile State
+  const [userProfile, setUserProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem("user_profile")
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {
+      name: "محمد القمودي",
+      phone: "+218 91 234 5678",
+      email: "m.algamody@example.com",
+      avatar: null as string | null,
+    }
+  })
+
+  // Edit Profile BottomSheet state
+  const [showEditProfileSheet, setShowEditProfileSheet] = useState(false)
+  const [editName, setEditName] = useState(userProfile.name)
+  const [editEmail, setEditEmail] = useState(userProfile.email)
+  const [editAvatar, setEditAvatar] = useState<string | null>(userProfile.avatar)
+  const [profileSavedFeedback, setProfileSavedFeedback] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Full Screen Phone Change state
+  const [isChangingPhone, setIsChangingPhone] = useState(false)
+
+  // Sync edit form with profile when sheet opens
+  useEffect(() => {
+    if (showEditProfileSheet) {
+      setEditName(userProfile.name)
+      setEditEmail(userProfile.email)
+      setEditAvatar(userProfile.avatar)
+      setProfileSavedFeedback(false)
+    }
+  }, [showEditProfileSheet, userProfile])
+
+  const handleSaveProfile = () => {
+    const updated = {
+      ...userProfile,
+      name: editName.trim() || userProfile.name,
+      email: editEmail.trim() || userProfile.email,
+      avatar: editAvatar,
+    }
+    setUserProfile(updated)
+    try {
+      localStorage.setItem("user_profile", JSON.stringify(updated))
+    } catch {}
+    setProfileSavedFeedback(true)
+    setTimeout(() => {
+      setShowEditProfileSheet(false)
+      setProfileSavedFeedback(false)
+    }, 600)
+  }
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          setEditAvatar(reader.result)
+        }
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleSelectLanguage = (targetLang: Lang) => {
     setPendingLang(targetLang)
     // Smooth micro-interaction: show selection feedback, then slide sheet down smoothly
@@ -116,17 +189,35 @@ export default function Profile({
               className="text-xl font-light text-[var(--foreground)]"
               style={{ fontFamily: "var(--font-display)" }}
             >
-              محمد القمودي
+              {userProfile.name}
             </h2>
             <p className="text-sm mt-0.5 text-[var(--muted-foreground)]">
-              +218 91 234 5678
+              <span dir="ltr" className="font-sans font-medium inline-block tracking-tight">
+                {userProfile.phone}
+              </span>
             </p>
           </div>
-          <Avatar size="lg">
-            <AvatarFallback className="text-[var(--muted-foreground)]">
-              <IconUser size={26} stroke={1.8} />
-            </AvatarFallback>
-          </Avatar>
+
+          {/* Interactive Avatar with Camera Badge */}
+          <button
+            type="button"
+            onClick={() => setShowEditProfileSheet(true)}
+            className="relative group cursor-pointer focus:outline-none transition-transform active:scale-95"
+            title={lang === "ar" ? "تعديل الملف الشخصي" : "Edit Profile"}
+          >
+            <Avatar size="lg" className="ring-2 ring-transparent group-hover:ring-[var(--primary)] transition-all">
+              {userProfile.avatar ? (
+                <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
+              ) : (
+                <AvatarFallback className="text-[var(--muted-foreground)] bg-[var(--secondary)]">
+                  <IconUser size={26} stroke={1.8} />
+                </AvatarFallback>
+              )}
+            </Avatar>
+            <div className="absolute -bottom-0.5 -end-0.5 w-5 h-5 rounded-full bg-[var(--primary)] text-white flex items-center justify-center shadow-xs border-2 border-[var(--card)]">
+              <IconCamera size={11} stroke={2.5} />
+            </div>
+          </button>
         </div>
 
         {/* Balance & Points Cards using unified Card */}
@@ -472,6 +563,176 @@ export default function Profile({
           </Button>
         </div>
       </BottomSheet>
+
+      {/* Edit Profile Unified BottomSheet */}
+      <BottomSheet
+        open={showEditProfileSheet}
+        onClose={() => setShowEditProfileSheet(false)}
+        title={lang === "ar" ? "تعديل الملف الشخصي" : "Edit Profile"}
+        description={
+          lang === "ar"
+            ? "تحديث الصورة والمعلومات الشخصية"
+            : "Update photo and personal details"
+        }
+        dir={dir}
+      >
+        <div className="mt-2 space-y-4 pb-2" dir={dir}>
+          {/* Avatar Edit Section */}
+          <div className="flex flex-col items-center justify-center pt-1 pb-2">
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageFileChange}
+            />
+            <div
+              className="relative group cursor-pointer"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Avatar size="xl" className="w-20 h-20 shadow-md ring-4 ring-[var(--primary)]/20">
+                {editAvatar ? (
+                  <AvatarImage src={editAvatar} alt={editName} />
+                ) : (
+                  <AvatarFallback className="text-[var(--muted-foreground)] bg-[var(--secondary)]">
+                    <IconUser size={36} stroke={1.8} />
+                  </AvatarFallback>
+                )}
+              </Avatar>
+              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                <IconCamera size={22} stroke={2} />
+              </div>
+              <button
+                type="button"
+                className="absolute -bottom-1 -end-1 w-7 h-7 rounded-full bg-[var(--primary)] text-white flex items-center justify-center shadow-md border-2 border-[var(--card)] cursor-pointer"
+                title={lang === "ar" ? "تغيير الصورة" : "Change photo"}
+              >
+                <IconCamera size={14} stroke={2.5} />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-3 mt-2.5">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-xs font-bold text-[var(--primary)] hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <IconCamera size={13} />
+                <span>{lang === "ar" ? "تغيير الصورة الشخصية" : "Change Photo"}</span>
+              </button>
+              {editAvatar && (
+                <button
+                  type="button"
+                  onClick={() => setEditAvatar(null)}
+                  className="text-xs font-medium text-red-500 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <IconTrash size={13} />
+                  <span>{lang === "ar" ? "إزالة" : "Remove"}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Full Name Input */}
+          <div className="space-y-1.5 text-start">
+            <label className="text-xs font-semibold text-[var(--foreground)] px-1">
+              {lang === "ar" ? "الاسم" : "Full Name"}
+            </label>
+            <Input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder={lang === "ar" ? "محمد القمودي" : "Your Name"}
+              startIcon={<IconUser size={18} className="text-[var(--muted-foreground)]" />}
+              className="h-12 rounded-2xl"
+              dir={dir}
+            />
+          </div>
+
+          {/* Email Input */}
+          <div className="space-y-1.5 text-start">
+            <label className="text-xs font-semibold text-[var(--foreground)] px-1">
+              {lang === "ar" ? "البريد الإلكتروني" : "Email Address"}
+            </label>
+            <Input
+              type="email"
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              placeholder="example@mail.com"
+              startIcon={<IconMail size={18} className="text-[var(--muted-foreground)]" />}
+              className="h-12 rounded-2xl"
+              dir="ltr"
+            />
+          </div>
+
+          {/* Phone Number Row with "تغيير" Button */}
+          <div className="space-y-1.5 text-start">
+            <label className="text-xs font-semibold text-[var(--foreground)] px-1">
+              {lang === "ar" ? "رقم الهاتف" : "Phone Number"}
+            </label>
+            <div className="flex items-center justify-between p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--card-alt)] transition-all">
+              <div className="flex items-center gap-2.5">
+                <IconPhone size={18} className="text-[var(--muted-foreground)] shrink-0" />
+                <span dir="ltr" className="font-semibold text-sm text-[var(--foreground)] font-sans">
+                  {userProfile.phone}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditProfileSheet(false)
+                  setIsChangingPhone(true)
+                }}
+                className="text-xs font-bold text-[var(--primary)] hover:bg-[var(--primary)]/15 bg-[var(--primary)]/10 px-3 py-1.5 rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1 shadow-xs"
+              >
+                <span>{lang === "ar" ? "تغيير" : "Change"}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Save Changes Button */}
+          <div className="pt-2">
+            <Button
+              size="lg"
+              fullWidth
+              onClick={handleSaveProfile}
+              className={`h-12 rounded-2xl font-bold shadow-md cursor-pointer transition-all ${
+                profileSavedFeedback ? "bg-emerald-600 hover:bg-emerald-600 text-white" : ""
+              }`}
+            >
+              {profileSavedFeedback ? (
+                <span className="flex items-center justify-center gap-2">
+                  <IconCheck size={18} stroke={3} />
+                  <span>{lang === "ar" ? "تم الحفظ بنجاح" : "Saved successfully"}</span>
+                </span>
+              ) : (
+                lang === "ar" ? "حفظ التغييرات" : "Save Changes"
+              )}
+            </Button>
+          </div>
+        </div>
+      </BottomSheet>
+
+      {/* Full-Screen Change Phone Page (NOT a modal) */}
+      {isChangingPhone && (
+        <ChangePhoneScreen
+          currentPhone={userProfile.phone}
+          theme={theme}
+          lang={lang}
+          onBackToEditSheet={() => {
+            setIsChangingPhone(false)
+            setShowEditProfileSheet(true)
+          }}
+          onSuccess={(newPhone) => {
+            const updated = { ...userProfile, phone: newPhone }
+            setUserProfile(updated)
+            try {
+              localStorage.setItem("user_profile", JSON.stringify(updated))
+            } catch {}
+            setIsChangingPhone(false)
+            setShowEditProfileSheet(true)
+          }}
+        />
+      )}
     </div>
   )
 }

@@ -9,7 +9,6 @@ import {
   IconDoorExit,
   IconPlus,
   IconThumbUp,
-  IconAlertCircle,
   IconUsers,
 } from "@tabler/icons-react"
 import { Lang, useT } from "../i18n"
@@ -18,7 +17,6 @@ import {
   CommunityUpdateData,
   CommunityReport,
   formatTimeHM,
-  isToday,
 } from "../data"
 import CommunityUpdateBottomSheet from "./CommunityUpdateBottomSheet"
 
@@ -103,7 +101,6 @@ export default function CommunityUpdates({
     ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     : data.updatedAt
 
-  const isUpdateToday = isToday(effectiveUpdatedAt)
   const timeFormatted = formatTimeHM(effectiveUpdatedAt, lang)
 
   const totalUpdates = data.openCount + data.closedCount
@@ -206,26 +203,15 @@ export default function CommunityUpdates({
             </div>
 
             {/* Smaller Last Update Time Underneath */}
-            {isUpdateToday ? (
-              <div className="inline-flex items-center justify-center gap-1.5 text-xs text-[var(--muted-foreground)] pt-1">
-                <IconClock size={13} className="text-[var(--primary)] shrink-0" />
-                <span>
-                  {lang === "ar" ? "آخر تحديث:" : "Last update:"}{" "}
-                  <strong className="text-[var(--foreground)] font-semibold">
-                    {timeFormatted}
-                  </strong>
-                </span>
-              </div>
-            ) : (
-              <div className="inline-flex items-center justify-center gap-1.5 text-xs text-amber-500 font-semibold pt-1">
-                <IconAlertCircle size={13} shrink-0 />
-                <span>
-                  {lang === "ar"
-                    ? "تختفي في ثاني يوم"
-                    : "Disappears next day"}
-                </span>
-              </div>
-            )}
+            <div className="inline-flex items-center justify-center gap-1.5 text-xs text-[var(--muted-foreground)] pt-1">
+              <IconClock size={13} className="text-[var(--primary)] shrink-0" />
+              <span>
+                {lang === "ar" ? "آخر تحديث:" : "Last update:"}{" "}
+                <strong className="text-[var(--foreground)] font-semibold">
+                  {timeFormatted}
+                </strong>
+              </span>
+            </div>
           </div>
 
           {/* Underneath: Updates Bar (شريط التحديثات) */}

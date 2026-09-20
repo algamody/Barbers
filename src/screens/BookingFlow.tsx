@@ -2,7 +2,7 @@ import { useState } from "react"
 import { SHOPS } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Card, Avatar, AvatarImage, Badge } from "@/components/ui"
+import { Button, Card, Avatar, AvatarImage, Badge, AlertDialog } from "@/components/ui"
 import {
   IconArrowLeft,
   IconArrowRight,
@@ -41,8 +41,20 @@ export default function BookingFlow({
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null)
   const [payment, setPayment] = useState<"wallet" | "cash">("wallet")
   const [step, setStep] = useState<1 | 2>(1)
-  const [showCashWarning, setShowCashWarning] = useState(false)
+  const [showCashWarningAlert, setShowCashWarningAlert] = useState(false)
+  const [showClosedAlert, setShowClosedAlert] = useState(false)
   const chosenStaff = shop.staff.find((s) => s.id === selectedStaff)
+
+  const isShopClosed = (() => {
+    try {
+      const saved = localStorage.getItem(`community_data_${shopId}`)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (typeof parsed.isOpen === "boolean") return !parsed.isOpen
+      }
+    } catch {}
+    return !shop.isOpen
+  })()
 
   // Promo Code State
   const [promoCode, setPromoCode] = useState("")
@@ -494,7 +506,6 @@ export default function BookingFlow({
                       interactive
                       onClick={() => {
                         setPayment(m)
-                        setShowCashWarning(m === "cash")
                       }}
                       className={`flex flex-col items-center gap-2 py-4 rounded-2xl transition-all ${
                         isSelected
@@ -533,28 +544,6 @@ export default function BookingFlow({
                   )
                 })}
               </div>
-
-              {/* Cash warning Card */}
-              {showCashWarning && payment === "cash" && (
-                <Card
-                  className="mt-3 rounded-xl px-4 py-3 text-xs leading-relaxed border-red-500/30 bg-red-500/10 text-[var(--muted-foreground)]"
-                  dir={dir}
-                >
-                  <p className="font-semibold mb-1 text-red-500 flex items-center gap-1.5">
-                    <IconAlertTriangle size={15} stroke={2.2} />
-                    <span>
-                      {lang === "ar"
-                        ? "تنبيه مهم — الدفع النقدي"
-                        : "Important — Cash Payment"}
-                    </span>
-                  </p>
-                  <p>
-                    {lang === "ar"
-                      ? "إذا لم تكن متواجداً في المحل عند حلول دورك، سيُسجَّل غيابك تلقائياً وسيُوقَف خيار الدفع النقدي من حسابك. ستُضطر للدفع عبر المحفظة في جميع حجوزاتك اللاحقة."
-                      : "If you are not present at the shop when your turn arrives, a no-show will be recorded and cash payment will be disabled on your account. All future bookings will require wallet payment."}
-                  </p>
-                </Card>
-              )}
             </div>
 
             <Card
@@ -579,14 +568,55 @@ export default function BookingFlow({
           fullWidth
           disabled={!selectedStaff}
           onClick={() => {
-            if (step === 1 && selectedStaff) setStep(2)
-            else if (step === 2) onConfirm()
+            if (step === 1 && selectedStaff) {
+              setStep(2)
+            } else if (step === 2) {
+              // 1. If closed: show closed alert only
+              if (isShopClosed) {
+                setShowClosedAlert(true)
+                return
+              }
+              // 2. If open and cash payment: show cash warning alert
+              if (payment === "cash") {
+                setShowCashWarningAlert(true)
+                return
+              }
+              // 3. Otherwise: confirm directly
+              onConfirm()
+            }
           }}
           className="h-12 rounded-2xl font-bold shadow-md cursor-pointer"
         >
           {step === 1 ? T.next : `${T.confirmBtn} (${finalPrice} ${lang === "ar" ? "د.ل" : "LYD"})`}
         </Button>
       </div>
+
+      {/* Reusable Alert Dialog for Closed Shop */}
+      <AlertDialog
+        open={showClosedAlert}
+        onClose={() => setShowClosedAlert(false)}
+        type="closed"
+        title={T.closedShopAlertTitle}
+        confirmText={T.ok}
+        dir={dir}
+      />
+
+      {/* Reusable Alert Dialog for Cash Payment Warning */}
+      <AlertDialog
+        open={showCashWarningAlert}
+        onClose={() => setShowCashWarningAlert(false)}
+        type="warning"
+        title={T.cashWarningTitle}
+        description={T.cashWarningDesc}
+        confirmText={T.agreeAndConfirm}
+        cancelText={T.cancel}
+        onConfirm={() => {
+          setShowCashWarningAlert(false)
+          onConfirm()
+        }}
+        onCancel={() => setShowCashWarningAlert(false)}
+        dir={dir}
+      />
     </div>
   )
 }
