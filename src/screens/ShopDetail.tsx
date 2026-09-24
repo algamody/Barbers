@@ -11,11 +11,14 @@ import {
   Tabs,
   TabsList,
   TabsTrigger,
+  Rating,
+  showSnackbar,
+  NotificationDot,
+  StatusChip,
+  BackButton,
 } from "@/components/ui"
+import { ServiceSelectionBottomSheet } from "@/components/bottom-sheets"
 import {
-  IconArrowLeft,
-  IconArrowRight,
-  IconStarFilled,
   IconClock,
   IconBolt,
   IconCheck,
@@ -23,8 +26,14 @@ import {
   IconX,
   IconPlus,
   IconSparkles,
+  IconMapPin,
+  IconStar,
+  IconScissors,
+  IconCamera,
+  IconShare,
+  IconFlame,
+  IconTicket,
   IconUsers,
-  IconUser,
 } from "@tabler/icons-react"
 import CommunityUpdates from "../components/CommunityUpdates"
 
@@ -33,10 +42,26 @@ interface Props {
   theme: Theme
   lang: Lang
   onBack: () => void
-  onBook: (shopId: string, serviceId: string) => void
-  isFavorite?: boolean
-  onToggleFavorite?: () => void
-  onOpenCommunity?: (shopId: string) => void
+  onBook: (shopId: string, serviceId: string, addonIds?: string[]) => void
+  onClaimSlot?: (
+    shopId: string,
+    staffId: string,
+    fee: number,
+    serviceId: string,
+    addonIds: string[],
+  ) => void
+  isFavorite: boolean
+  onToggleFavorite: () => void
+  onOpenCommunity: (shopId: string) => void
+  addingPersonName?: string
+  onBackToGroup?: () => void
+  initialTab?: string
+  reopenClaimedSlot?: {
+    staffId?: string
+    fee?: number
+    serviceId?: string
+    addonIds?: string[]
+  } | null
 }
 
 export default function ShopDetail({
@@ -45,17 +70,65 @@ export default function ShopDetail({
   lang,
   onBack,
   onBook,
+  onClaimSlot,
   isFavorite,
   onToggleFavorite,
   onOpenCommunity,
+  addingPersonName,
+  onBackToGroup,
+  initialTab,
+  reopenClaimedSlot,
 }: Props) {
   const C = getC(theme)
   const T = useT(lang)
   const dir = lang === "ar" ? "rtl" : "ltr"
   const shop = SHOPS.find((s) => s.id === shopId)!
-  const [tab, setTab] = useState<string>("services")
+  const [tab, setTab] = useState<string>(
+    initialTab || (reopenClaimedSlot?.staffId ? "staff" : "services"),
+  )
   const [selectedService, setSelectedService] = useState<string | null>(null)
   const [selectedAddons, setSelectedAddons] = useState<string[]>([])
+
+  const [claimedSlotBooking, setClaimedSlotBooking] = useState<{
+    staffId: string
+    fee: number
+    serviceId?: string
+    addonIds?: string[]
+  } | null>(() => {
+    if (reopenClaimedSlot?.staffId) {
+      return {
+        staffId: reopenClaimedSlot.staffId,
+        fee: reopenClaimedSlot.fee ?? 5,
+        serviceId: reopenClaimedSlot.serviceId,
+        addonIds: reopenClaimedSlot.addonIds,
+      }
+    }
+    return null
+  })
+  const [isClaimedServiceSheetOpen, setIsClaimedServiceSheetOpen] =
+    useState<boolean>(() => !!reopenClaimedSlot?.staffId)
+
+  const [hasDismissedStaffNotification, setHasDismissedStaffNotification] =
+    useState<boolean>(
+      () => initialTab === "staff" || !!reopenClaimedSlot?.staffId,
+    )
+  const [
+    hasDismissedCommunityNotification,
+    setHasDismissedCommunityNotification,
+  ] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (reopenClaimedSlot?.staffId) {
+      setTab("staff")
+      setClaimedSlotBooking({
+        staffId: reopenClaimedSlot.staffId,
+        fee: reopenClaimedSlot.fee ?? 5,
+        serviceId: reopenClaimedSlot.serviceId,
+        addonIds: reopenClaimedSlot.addonIds,
+      })
+      setIsClaimedServiceSheetOpen(true)
+    }
+  }, [reopenClaimedSlot])
 
   const toggleAddon = (addonId: string) => {
     setSelectedAddons((prev) =>
@@ -65,15 +138,14 @@ export default function ShopDetail({
     )
   }
 
-  const [communityData, setCommunityData] = useState<CommunityUpdateData | null>(
-    () => {
+  const [communityData, setCommunityData] =
+    useState<CommunityUpdateData | null>(() => {
       try {
         const saved = localStorage.getItem(`community_data_${shop.id}`)
         if (saved) return JSON.parse(saved)
       } catch {}
       return (shop as any).communityUpdate || null
-    },
-  )
+    })
   const [isCommunityOpen, setIsCommunityOpen] = useState(false)
   const [isSimulatedYesterday, setIsSimulatedYesterday] = useState(false)
 
@@ -100,14 +172,22 @@ export default function ShopDetail({
   const currentIsOpen = shop.isVerified
     ? shop.isOpen
     : isCommunityActiveToday
-      ? communityData?.isOpen ?? shop.isOpen
+      ? (communityData?.isOpen ?? shop.isOpen)
       : shop.isOpen
 
   const currentWaitingCount = shop.isVerified
     ? shop.waitingCount
     : isCommunityActiveToday
-      ? communityData?.waitingCount ?? shop.waitingCount
+      ? (communityData?.waitingCount ?? shop.waitingCount)
       : shop.waitingCount
+
+  const hasCommunityUpdateToday =
+    !!communityData &&
+    (communityData.openCount > 0 ||
+      communityData.closedCount > 0 ||
+      (communityData.reports && communityData.reports.length > 0)) &&
+    (!effectiveCommunityUpdatedAt || isToday(effectiveCommunityUpdatedAt))
+
   const [altSecsMap, setAltSecsMap] = useState<Record<string, number>>(() => {
     const m: Record<string, number> = {}
     shop.staff.forEach((st) => {
@@ -115,7 +195,29 @@ export default function ShopDetail({
     })
     return m
   })
-  const [altClaimed, setAltClaimed] = useState<Record<string, boolean>>({})
+  const [altClaimed, setAltClaimed] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem(`claimed_slots_${shop.id}`)
+      return saved ? JSON.parse(saved) : {}
+    } catch {
+      return {}
+    }
+  })
+
+  const hasStaffWithConfirmedSlot = shop.staff.some((st) => {
+    const isInactive = st.isActive === false
+    const secs = altSecsMap[st.id] ?? 0
+    const claimed = altClaimed[st.id]
+    return !isInactive && !!st.altBooking && !claimed && secs > 0
+  })
+
+  const showStaffNotification =
+    hasStaffWithConfirmedSlot &&
+    !hasDismissedStaffNotification &&
+    tab !== "staff"
+
+  const showCommunityNotification =
+    hasCommunityUpdateToday && !hasDismissedCommunityNotification
 
   const [lightboxImage, setLightboxImage] = useState<{
     url: string
@@ -259,18 +361,12 @@ export default function ShopDetail({
           className="absolute top-12 left-4 right-4 flex items-center justify-between z-10"
           dir={dir}
         >
-          <Button
+          <BackButton
             variant="secondary"
-            size="icon-sm"
-            onClick={onBack}
+            dir={dir}
+            onClick={addingPersonName && onBackToGroup ? onBackToGroup : onBack}
             className="bg-black/60 text-white hover:bg-black/80 rounded-full border-none backdrop-blur-md shadow-md cursor-pointer"
-          >
-            {dir === "rtl" ? (
-              <IconArrowRight size={18} stroke={2} />
-            ) : (
-              <IconArrowLeft size={18} stroke={2} />
-            )}
-          </Button>
+          />
 
           <div className="flex items-center gap-2">
             {/* Community updates circular button */}
@@ -278,6 +374,7 @@ export default function ShopDetail({
               variant="secondary"
               size="icon-sm"
               onClick={() => {
+                setHasDismissedCommunityNotification(true)
                 if (onOpenCommunity) {
                   onOpenCommunity(shop.id)
                 } else {
@@ -288,10 +385,15 @@ export default function ShopDetail({
               title={lang === "ar" ? "تحديثات المجتمع" : "Community updates"}
             >
               <IconUsers size={18} stroke={2} />
-              {communityData &&
-                (communityData.openCount > 0 || communityData.closedCount > 0) && (
-                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--primary)] ring-2 ring-black" />
-                )}
+              <NotificationDot
+                visible={showCommunityNotification}
+                pulse
+                color="primary"
+                size="sm"
+                placement="top-right"
+                className="-top-0.5 -right-0.5"
+                ringClassName="ring-2 ring-black"
+              />
             </Button>
 
             {/* Favorite button */}
@@ -322,17 +424,8 @@ export default function ShopDetail({
         </div>
         <div className="absolute bottom-4 right-4 left-4" dir={dir}>
           <div className="flex items-end justify-between">
-            <div className="flex items-center gap-1.5">
-              <IconStarFilled size={13} className="text-[var(--primary)]" />
-              <span className="text-xs text-[var(--primary)] font-bold">
-                {shop.rating}
-              </span>
-              <span className="text-xs text-white/80">
-                ({shop.reviewCount})
-              </span>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 justify-end">
+            <div className="text-start">
+              <div className="flex items-center gap-1.5">
                 <h2
                   className="text-xl font-light text-white"
                   style={{ fontFamily: "var(--font-display)" }}
@@ -343,11 +436,21 @@ export default function ShopDetail({
                   <IconCheck
                     size={15}
                     stroke={3}
-                    className="text-[var(--primary)]"
+                    className="text-[var(--primary)] shrink-0"
                   />
                 )}
               </div>
               <p className="text-xs text-white/75">{shop.address}</p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Rating
+                value={shop.rating}
+                size={13}
+                textClassName="text-white font-bold"
+              />
+              <span className="text-xs text-white/80">
+                ({shop.reviewCount})
+              </span>
             </div>
           </div>
         </div>
@@ -360,20 +463,7 @@ export default function ShopDetail({
       >
         {/* Status badge and Community time if active (in place of where clock was) */}
         <div className="flex items-center gap-2">
-          <Badge
-            variant={currentIsOpen ? "success" : "destructive"}
-            size="sm"
-            className="gap-1 font-semibold"
-          >
-            <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                currentIsOpen ? "bg-emerald-400" : "bg-red-400"
-              }`}
-            />
-            {currentIsOpen
-              ? T.openWithWaiting(currentWaitingCount)
-              : T.closed}
-          </Badge>
+          <StatusChip isOpen={currentIsOpen} lang={lang} />
 
           {/* Community status badge with time (HH:MM) - disappears next day */}
           {isCommunityActiveToday && (
@@ -402,11 +492,38 @@ export default function ShopDetail({
       </div>
 
       {/* Tabs navigation using unified Tabs component */}
-      <div className="px-5 pt-3">
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="w-full grid grid-cols-4">
+      <div className="px-5 pt-3" dir={dir}>
+        <Tabs
+          value={tab}
+          onValueChange={(newTab) => {
+            setTab(newTab)
+            if (newTab === "staff") {
+              setHasDismissedStaffNotification(true)
+            }
+          }}
+          dir={dir}
+        >
+          <TabsList className="w-full grid grid-cols-4" dir={dir}>
             <TabsTrigger value="services">{T.services}</TabsTrigger>
-            <TabsTrigger value="staff">{T.staff}</TabsTrigger>
+            <TabsTrigger
+              value="staff"
+              className="relative"
+              onClick={() => {
+                setTab("staff")
+                setHasDismissedStaffNotification(true)
+              }}
+            >
+              <NotificationDot
+                visible={showStaffNotification}
+                pulse
+                color="primary"
+                size="xs"
+                placement="top-end"
+                className="-top-0.5 -end-1.5"
+              >
+                <span>{T.staff}</span>
+              </NotificationDot>
+            </TabsTrigger>
             <TabsTrigger value="gallery">
               {lang === "ar" ? "الصور" : "Gallery"}
             </TabsTrigger>
@@ -436,28 +553,36 @@ export default function ShopDetail({
                   }`}
                 >
                   {/* Service info: Title & Time with Clock icon */}
-                  <div className="flex-1 min-w-0 text-start">
-                    <p className="text-sm font-semibold text-[var(--foreground)] truncate">
-                      {lang === "ar" ? sv.name : sv.nameEn}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-0.5 text-xs text-[var(--muted-foreground)]">
-                      <IconClock size={12} stroke={2} className="text-[var(--primary)] shrink-0" />
-                      <span>
-                        {sv.duration} {T.mins}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Price & Selection Checkmark (anchored to opposite end) */}
-                  <div className="flex items-center gap-2.5 shrink-0 text-end">
-                    <span className="text-sm font-bold text-[var(--primary)] tabular-nums">
-                      {sv.price} {lang === "ar" ? "د.ل" : "LYD"}
-                    </span>
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
                     {isSelected && (
                       <span className="w-4 h-4 rounded-full flex items-center justify-center bg-[var(--primary)] text-black shadow-xs shrink-0">
                         <IconCheck size={11} stroke={3.5} />
                       </span>
                     )}
+                    <div className="flex-1 min-w-0 text-start">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-[var(--foreground)] truncate">
+                          {lang === "ar" ? sv.name : sv.nameEn}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5 text-xs text-[var(--muted-foreground)]">
+                        <IconClock
+                          size={12}
+                          stroke={2}
+                          className="text-[var(--primary)] shrink-0"
+                        />
+                        <span>
+                          {sv.duration} {T.mins}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Price */}
+                  <div className="shrink-0 text-end">
+                    <span className="text-sm font-bold text-[var(--primary)] tabular-nums">
+                      {sv.price} {lang === "ar" ? "د.ل" : "LYD"}
+                    </span>
                   </div>
                 </Card>
               )
@@ -539,15 +664,10 @@ export default function ShopDetail({
             </p>
             {shop.staff.map((st) => {
               const isInactive = st.isActive === false
-              const inactiveReasonText =
-                st.inactiveReason
-                  ? lang === "ar"
-                    ? st.inactiveReason.ar
-                    : st.inactiveReason.en
-                  : T.inactiveBarber
               const secs = altSecsMap[st.id] ?? 0
               const claimed = altClaimed[st.id]
-              const hasAlt = !isInactive && !!st.altBooking && !claimed && secs > 0
+              const hasAlt =
+                !isInactive && !!st.altBooking && !claimed && secs > 0
               const mins = Math.floor(secs / 60)
               const secsRem = secs % 60
 
@@ -565,43 +685,53 @@ export default function ShopDetail({
                   {/* Alt booking banner */}
                   {hasAlt && (
                     <div className="px-4 pt-3 pb-0" dir={dir}>
-                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-red-500/15 border border-red-500/30">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold tabular-nums text-red-500">
-                            {String(mins).padStart(2, "0")}:
-                            {String(secsRem).padStart(2, "0")}
-                          </span>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() =>
-                              setAltClaimed((p) => ({ ...p, [st.id]: true }))
-                            }
-                            className="h-7 px-2.5 text-xs font-bold rounded-full"
-                          >
-                            {lang === "ar"
-                              ? `خذ الدور — ${st.altBooking!.fee} د.ل`
-                              : `Claim — ${st.altBooking!.fee} LYD`}
-                          </Button>
-                        </div>
+                      <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 gap-2">
+                        {/* Right side in Arabic: Text */}
                         <div
                           style={{
                             textAlign: dir === "rtl" ? "right" : "left",
                           }}
+                          className="min-w-0 flex-1"
                         >
-                          <p className="text-xs font-semibold text-red-500 flex items-center gap-1 justify-end">
-                            <IconBolt size={13} stroke={2.5} />
+                          <p className="text-xs font-bold text-red-500 flex items-center gap-1">
+                            <IconBolt
+                              size={14}
+                              stroke={2.5}
+                              className="shrink-0"
+                            />
                             <span>
                               {lang === "ar"
                                 ? "دور بديل متاح"
                                 : "Slot available"}
                             </span>
                           </p>
-                          <p className="text-xs text-[var(--muted-foreground)]">
+                          <p className="text-[11px] text-[var(--muted-foreground)] truncate mt-0.5">
                             {lang === "ar"
                               ? "الزبون لم يؤكد حضوره"
                               : "Customer didn't confirm"}
                           </p>
+                        </div>
+
+                        {/* Left side in Arabic: Button without countdown timer */}
+                        <div className="shrink-0">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              setClaimedSlotBooking({
+                                staffId: st.id,
+                                fee: st.altBooking?.fee ?? 5,
+                                serviceId: shop.services[0]?.id,
+                                addonIds: [],
+                              })
+                              setIsClaimedServiceSheetOpen(true)
+                            }}
+                            className="h-8 px-3.5 text-xs font-bold rounded-full shadow-xs cursor-pointer active:scale-95 transition-transform"
+                          >
+                            {lang === "ar"
+                              ? `خذ الدور — ${st.altBooking?.fee ?? 5} د.ل`
+                              : `Claim — ${st.altBooking?.fee ?? 5} LYD`}
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -625,17 +755,35 @@ export default function ShopDetail({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-4 px-4 py-3.5">
-                    <div className="text-right flex-1">
-                      <div className="flex items-center gap-2 justify-end">
-                        {isInactive && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-500/15 text-zinc-500 border border-zinc-500/25">
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-                            <span>{inactiveReasonText}</span>
-                          </span>
-                        )}
+                  <div
+                    className="flex items-center gap-4 px-4 py-3.5"
+                    dir={dir}
+                  >
+                    {/* Barber Avatar (on right in Arabic / RTL) */}
+                    <div className="relative shrink-0">
+                      <Avatar
+                        size="lg"
+                        className={
+                          isInactive ? "opacity-75 grayscale-[35%]" : ""
+                        }
+                      >
+                        <AvatarImage src={st.photo} alt={st.name} />
+                      </Avatar>
+                      {isInactive && (
+                        <span
+                          className={`absolute -bottom-0.5 ${
+                            dir === "rtl" ? "-left-0.5" : "-right-0.5"
+                          } w-3.5 h-3.5 rounded-full bg-zinc-400 border-2 border-[var(--card)]`}
+                          title={T.inactiveBarber}
+                        />
+                      )}
+                    </div>
+
+                    {/* Barber Details (on left of avatar in Arabic / RTL) */}
+                    <div className="flex-1 min-w-0 text-start">
+                      <div className="flex items-center gap-2">
                         <p
-                          className={`text-sm font-semibold ${
+                          className={`text-sm font-semibold truncate ${
                             isInactive
                               ? "text-[var(--muted-foreground)]"
                               : "text-[var(--foreground)]"
@@ -643,46 +791,39 @@ export default function ShopDetail({
                         >
                           {st.name}
                         </p>
+                        {isInactive && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-500/15 text-zinc-500 border border-zinc-500/25 shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
+                            <span>{T.inactiveBarber}</span>
+                          </span>
+                        )}
                       </div>
 
                       {isInactive ? (
-                        <div className="flex items-center gap-2.5 mt-1 justify-end text-xs text-[var(--muted-foreground)]">
-                          <span className="text-[var(--primary)] font-bold flex items-center gap-1 opacity-75">
-                            <IconStarFilled size={12} />
-                            <span>{st.rating}</span>
-                          </span>
+                        <div className="flex items-center gap-2.5 mt-1 text-xs text-[var(--muted-foreground)]">
+                          <Rating
+                            value={st.rating}
+                            size={12}
+                            textClassName="font-bold opacity-75"
+                          />
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3 mt-1 justify-end text-xs text-[var(--muted-foreground)]">
+                        <div className="flex items-center gap-3 mt-1 text-xs text-[var(--muted-foreground)] flex-wrap">
+                          <Rating
+                            value={st.rating}
+                            size={12}
+                            textClassName="font-bold"
+                          />
+                          <span>
+                            {st.queue} {T.waiting2}
+                          </span>
                           <span className="flex items-center gap-1">
                             <IconClock size={12} stroke={2} />
                             <span>
                               ~{st.avgWait} {T.mins}
                             </span>
                           </span>
-                          <span>
-                            {st.queue} {T.waiting2}
-                          </span>
-                          <span className="text-[var(--primary)] font-bold flex items-center gap-1">
-                            <IconStarFilled size={12} />
-                            <span>{st.rating}</span>
-                          </span>
                         </div>
-                      )}
-                    </div>
-
-                    <div className="relative shrink-0">
-                      <Avatar
-                        size="lg"
-                        className={isInactive ? "opacity-75 grayscale-[35%]" : ""}
-                      >
-                        <AvatarImage src={st.photo} alt={st.name} />
-                      </Avatar>
-                      {isInactive && (
-                        <span
-                          className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-zinc-400 border-2 border-[var(--card)]"
-                          title={T.inactiveBarber}
-                        />
                       )}
                     </div>
                   </div>
@@ -753,19 +894,7 @@ export default function ShopDetail({
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <div className="flex gap-0.5">
-                        {Array.from({ length: 5 }).map((_, j) => (
-                          <IconStarFilled
-                            key={j}
-                            size={11}
-                            className={
-                              j < r.rating
-                                ? "text-[var(--primary)]"
-                                : "text-zinc-300 dark:text-zinc-700"
-                            }
-                          />
-                        ))}
-                      </div>
+                      <Rating value={r.rating} variant="stars" size={11} />
                       <span className="text-[11px] text-[var(--muted-foreground)]">
                         {r.time}
                       </span>
@@ -823,7 +952,9 @@ export default function ShopDetail({
           size="lg"
           fullWidth
           disabled={!selectedService}
-          onClick={() => selectedService && onBook(shopId, selectedService)}
+          onClick={() =>
+            selectedService && onBook(shopId, selectedService, selectedAddons)
+          }
         >
           {selectedService ? (
             <span className="flex items-center justify-between w-full px-1">
@@ -887,6 +1018,45 @@ export default function ShopDetail({
           onUpdateCommunityData={handleUpdateCommunityData}
           onToggleSimulateDate={() => setIsSimulatedYesterday((prev) => !prev)}
           isSimulatedYesterday={isSimulatedYesterday}
+        />
+      )}
+
+      {/* Service & Add-ons Selection Bottom Sheet for Claimed Slot */}
+      {claimedSlotBooking && (
+        <ServiceSelectionBottomSheet
+          open={isClaimedServiceSheetOpen}
+          onClose={() => setIsClaimedServiceSheetOpen(false)}
+          title={
+            lang === "ar"
+              ? "تحديد الخدمة والإضافات"
+              : "Select Service & Add-ons"
+          }
+          confirmText={
+            lang === "ar" ? "تأكيد ومتابعة للفاتورة" : "Confirm & View Invoice"
+          }
+          totalLabel={lang === "ar" ? "الإجمالي:" : "Total:"}
+          showNameInput={false}
+          onConfirm={({ serviceId, addonIds }) => {
+            setIsClaimedServiceSheetOpen(false)
+            if (onClaimSlot && claimedSlotBooking) {
+              onClaimSlot(
+                shopId,
+                claimedSlotBooking.staffId,
+                claimedSlotBooking.fee,
+                serviceId,
+                addonIds,
+              )
+            }
+          }}
+          services={shop.services}
+          addons={shop.addons}
+          initialServiceId={
+            claimedSlotBooking.serviceId || shop.services[0]?.id
+          }
+          initialAddonIds={claimedSlotBooking.addonIds || []}
+          initialStaffId={claimedSlotBooking.staffId}
+          lang={lang}
+          dir={dir}
         />
       )}
     </div>

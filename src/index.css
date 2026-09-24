@@ -2,6 +2,8 @@
 @import 'tailwindcss';
 @import 'leaflet/dist/leaflet.css';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-display: 'Instrument Serif', Georgia, serif;
   --font-body: 'Cairo', 'Outfit', system-ui, sans-serif;
@@ -34,6 +36,14 @@
   --success: #376640;
   --success-foreground: #ffffff;
   --success-bg: #e6f0e8;
+  --status-open-text: #059669;
+  --status-open-bg: rgba(16, 185, 129, 0.15);
+  --status-open-border: rgba(5, 150, 105, 0.3);
+  --status-open-dot: #10b981;
+  --status-closed-text: #dc2626;
+  --status-closed-bg: rgba(239, 68, 68, 0.15);
+  --status-closed-border: rgba(220, 38, 38, 0.3);
+  --status-closed-dot: #ef4444;
   --radius: 1rem;
 }
 
@@ -57,6 +67,14 @@
   --success: #4a8a5a;
   --success-foreground: #ffffff;
   --success-bg: #1a2e20;
+  --status-open-text: #34d399;
+  --status-open-bg: rgba(16, 185, 129, 0.2);
+  --status-open-border: rgba(52, 211, 153, 0.35);
+  --status-open-dot: #34d399;
+  --status-closed-text: #f87171;
+  --status-closed-bg: rgba(239, 68, 68, 0.2);
+  --status-closed-border: rgba(248, 113, 113, 0.35);
+  --status-closed-dot: #f87171;
 }
 
 * {
@@ -232,5 +250,82 @@ body {
 
 .animate-modal-exit {
   animation: modalScaleOut 0.12s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes snackbarRiseUp {
+  0% {
+    opacity: 0;
+    transform: translateY(34px) scale(0.95);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-5px) scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes snackbarFadeDown {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.95);
+  }
+}
+
+.animate-snackbar-enter {
+  animation: snackbarRiseUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-snackbar-exit {
+  animation: snackbarFadeDown 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes barberCuttingMotion {
+  0%, 100% {
+    transform: scaleX(-1) translateY(0) rotate(0deg);
+  }
+  15% {
+    transform: scaleX(-1) translateY(-0.8px) rotate(-1.5deg);
+  }
+  30% {
+    transform: scaleX(-1) translateY(0.4px) rotate(1deg);
+  }
+  45% {
+    transform: scaleX(-1) translateY(-1.2px) rotate(-2deg);
+  }
+  60% {
+    transform: scaleX(-1) translateY(0) rotate(0.5deg);
+  }
+  75% {
+    transform: scaleX(-1) translateY(-0.8px) rotate(-1.5deg);
+  }
+  90% {
+    transform: scaleX(-1) translateY(0.3px) rotate(0.5deg);
+  }
+}
+
+.animate-barber-cutting {
+  transform-origin: center center;
+  animation: barberCuttingMotion 1.6s ease-in-out infinite;
+}
+
+/* Faster smooth pulse for NotificationDot (1.25s) preserving smooth gradient & curve */
+@keyframes notificationPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.38;
+  }
+}
+
+.animate-pulse-dot {
+  animation: notificationPulse 1.25s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 

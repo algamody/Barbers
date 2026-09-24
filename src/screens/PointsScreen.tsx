@@ -1,18 +1,15 @@
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Card } from "@/components/ui"
+import { Button, Card, CopyButton, showSnackbar, BackButton } from "@/components/ui"
 import { BottomSheet } from "@/components/ui/bottom-sheet"
 import {
-  IconArrowLeft,
-  IconArrowRight,
   IconSparkles,
   IconGift,
   IconPercentage,
   IconTicket,
   IconCheck,
   IconLock,
-  IconCopy,
   IconCircleCheck,
   IconAward,
   IconInfoCircle,
@@ -111,8 +108,7 @@ export default function PointsScreen({
     reward: RewardItem
     code: string
   } | null>(null)
-  const [copiedCode, setCopiedCode] = useState(false)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const codeCopyBtnRef = useRef<HTMLButtonElement>(null)
 
   const handleRedeem = (reward: RewardItem) => {
     if (points < reward.pointsRequired) return
@@ -130,20 +126,17 @@ export default function PointsScreen({
       code: voucherCode,
     })
 
-    setToastMessage(
-      lang === "ar"
-        ? `تم استبدال ${reward.title} بنجاح! تم خصم ${reward.pointsRequired} نقطة.`
-        : `Redeemed ${reward.titleEn}! ${reward.pointsRequired} points deducted.`,
-    )
-    setTimeout(() => setToastMessage(null), 4000)
-  }
-
-  const handleCopy = (code: string) => {
-    try {
-      navigator.clipboard.writeText(code)
-      setCopiedCode(true)
-      setTimeout(() => setCopiedCode(false), 2000)
-    } catch {}
+    showSnackbar({
+      title:
+        lang === "ar"
+          ? `تم استبدال ${reward.title} بنجاح!`
+          : `Redeemed ${reward.titleEn}!`,
+      description:
+        lang === "ar"
+          ? `تم خصم ${reward.pointsRequired} نقطة.`
+          : `${reward.pointsRequired} points deducted.`,
+      type: "success",
+    })
   }
 
   return (
@@ -155,17 +148,12 @@ export default function PointsScreen({
       {/* Screen Header with Back Button */}
       <div className="px-5 pt-12 pb-4 border-b border-[var(--border)]">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <BackButton
+            dir={dir}
             onClick={onBack}
-            className="w-10 h-10 rounded-2xl bg-[var(--secondary)]/50 border border-[var(--border)] flex items-center justify-center text-[var(--foreground)] hover:bg-[var(--secondary)] active:scale-95 transition-all cursor-pointer shrink-0"
-          >
-            {dir === "rtl" ? (
-              <IconArrowRight size={20} />
-            ) : (
-              <IconArrowLeft size={20} />
-            )}
-          </button>
+            className="w-10 h-10 rounded-2xl bg-[var(--secondary)]/50 border border-[var(--border)] hover:bg-[var(--secondary)]"
+            iconSize={20}
+          />
 
           <div className="flex-1 min-w-0">
             <h1 className="text-xl font-bold text-[var(--foreground)] truncate">
@@ -185,21 +173,7 @@ export default function PointsScreen({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 pb-24 space-y-4">
-        {/* Toast Alert */}
-        {toastMessage && (
-          <div className="px-4 py-3 rounded-2xl flex items-center gap-3 shadow-lg bg-emerald-500/15 border border-emerald-500/30 animate-sheet-enter">
-            <IconCircleCheck
-              size={22}
-              stroke={2}
-              className="text-emerald-500 shrink-0"
-            />
-            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              {toastMessage}
-            </p>
-          </div>
-        )}
-
+      <div className="flex-1 overflow-y-auto px-5 py-4 pb-10 space-y-4">
         {/* 1. Top Card: Points Balance (رصيد النقاط بالاعلى) */}
         <Card className="rounded-3xl p-5 bg-[var(--card)] border border-[var(--border)] shadow-xs text-center space-y-3">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-bold border border-amber-500/20 mx-auto">
@@ -362,11 +336,6 @@ export default function PointsScreen({
                   ? redeemedReward.reward.title
                   : redeemedReward.reward.titleEn}
               </h3>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                {lang === "ar"
-                  ? "تم خصم النقاط ورصيدك الحالي أصبح " + points + " نقطة"
-                  : "Points deducted! Current balance: " + points + " pts"}
-              </p>
             </div>
 
             {/* Voucher Code Box with Copy button */}
@@ -375,24 +344,19 @@ export default function PointsScreen({
                 {lang === "ar" ? "كود الخصم الخاص بك" : "Your Voucher Code"}
               </label>
               <div className="flex items-center justify-between p-3 rounded-2xl bg-[var(--secondary)] border border-[var(--border)] font-mono text-sm font-bold text-[var(--foreground)] tracking-wider">
-                <span>{redeemedReward.code}</span>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(redeemedReward.code)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[var(--primary)] text-white text-xs font-sans font-bold hover:bg-[var(--primary)]/90 active:scale-95 transition-all cursor-pointer shadow-xs"
+                <span
+                  onClick={() => codeCopyBtnRef.current?.click()}
+                  className="cursor-pointer hover:opacity-80 select-all"
+                  title={lang === "ar" ? "انقر للنسخ" : "Click to copy"}
                 >
-                  {copiedCode ? (
-                    <>
-                      <IconCheck size={14} stroke={2.5} />
-                      <span>{lang === "ar" ? "تم النسخ" : "Copied"}</span>
-                    </>
-                  ) : (
-                    <>
-                      <IconCopy size={14} stroke={2.2} />
-                      <span>{lang === "ar" ? "نسخ" : "Copy"}</span>
-                    </>
-                  )}
-                </button>
+                  {redeemedReward.code}
+                </span>
+                <CopyButton
+                  ref={codeCopyBtnRef}
+                  text={redeemedReward.code}
+                  lang={lang}
+                  title={lang === "ar" ? "نسخ كود الخصم" : "Copy voucher code"}
+                />
               </div>
             </div>
 

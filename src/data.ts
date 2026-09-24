@@ -42,7 +42,9 @@ export interface StaffMember {
   } | null
 }
 
-export function isToday(dateInput: Date | string | number | null | undefined): boolean {
+export function isToday(
+  dateInput: Date | string | number | null | undefined,
+): boolean {
   if (!dateInput) return false
   const d = new Date(dateInput)
   if (isNaN(d.getTime())) return false
@@ -266,7 +268,7 @@ export const SHOPS = [
         avgWait: 32,
         // Demo: a customer didn't confirm — open window active (< 5 min left)
         altBooking: {
-          fee: 10,
+          fee: 5,
           openWindowSeconds: 270,
           originalCustomer: "م. السيد",
         },
@@ -291,7 +293,7 @@ export const SHOPS = [
         avgWait: 20,
         // Demo 4th barber: customer hasn't confirmed reservation, 5 mins remaining (300s)
         altBooking: {
-          fee: 10,
+          fee: 5,
           openWindowSeconds: 300,
           originalCustomer: "ع. محمود",
         },
@@ -485,10 +487,13 @@ export const SHOPS = [
   },
 ]
 
+export type Shop = typeof SHOPS[number]
+
 export const MY_BOOKING = {
   shopName: "Royal Cut",
   staffName: "محمد الزروق",
   service: "شعر + لحية",
+  addons: "غسيل شعر",
   position: 2,
   totalAhead: 3,
   estimatedWait: 24,

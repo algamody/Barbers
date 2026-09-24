@@ -1,12 +1,8 @@
 import { useState } from "react"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Input, Card, Badge } from "@/components/ui"
-import {
-  IconScissors,
-  IconArrowLeft,
-  IconArrowRight,
-} from "@tabler/icons-react"
+import { Button, Input, Card, Badge, BackButton } from "@/components/ui"
+import { IconScissors } from "@tabler/icons-react"
 
 interface Props {
   theme: Theme
@@ -27,12 +23,51 @@ export default function Auth({ theme, lang, onDone }: Props) {
   const [flow, setFlow] = useState<"login" | "signup">("login")
 
   const handleOtpChange = (i: number, val: string) => {
-    if (!/^\d?$/.test(val)) return
+    const digit = val.replace(/\D/g, "").slice(-1)
     const next = [...otp]
-    next[i] = val
+    next[i] = digit
     setOtp(next)
-    if (val && i < 3) document.getElementById(`otp-${i + 1}`)?.focus()
-    if (next.every((d) => d !== "") && i === 3) setTimeout(onDone, 400)
+    if (digit && i < 3) {
+      document.getElementById(`otp-${i + 1}`)?.focus()
+    }
+    if (next.every((d) => d !== "")) {
+      setTimeout(onDone, 400)
+    }
+  }
+
+  const handleOtpKeyDown = (
+    i: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (e.key === "Backspace") {
+      if (!otp[i] && i > 0) {
+        document.getElementById(`otp-${i - 1}`)?.focus()
+      }
+    } else if (e.key === "ArrowLeft" && i > 0) {
+      document.getElementById(`otp-${i - 1}`)?.focus()
+    } else if (e.key === "ArrowRight" && i < 3) {
+      document.getElementById(`otp-${i + 1}`)?.focus()
+    }
+  }
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    const pasted = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 4)
+    if (pasted) {
+      const next = [...otp]
+      for (let i = 0; i < 4; i++) {
+        next[i] = pasted[i] || ""
+      }
+      setOtp(next)
+      const nextFocus = Math.min(pasted.length, 3)
+      document.getElementById(`otp-${nextFocus}`)?.focus()
+      if (pasted.length === 4) {
+        setTimeout(onDone, 400)
+      }
+    }
   }
 
   if (step === "splash") {
@@ -110,18 +145,13 @@ export default function Auth({ theme, lang, onDone }: Props) {
     return (
       <div className="flex flex-col h-full" style={{ backgroundColor: C.bg }}>
         <div className="px-5 pt-14 pb-5" dir={dir}>
-          <Button
+          <BackButton
             variant="ghost"
-            size="icon-sm"
+            dir={dir}
             onClick={() => setStep("splash")}
             className="mb-5 text-[var(--muted-foreground)]"
-          >
-            {dir === "rtl" ? (
-              <IconArrowRight size={20} stroke={2} />
-            ) : (
-              <IconArrowLeft size={20} stroke={2} />
-            )}
-          </Button>
+            iconSize={20}
+          />
           <h2
             className="text-2xl font-light"
             style={{ fontFamily: "var(--font-display)", color: C.text }}
@@ -188,7 +218,13 @@ export default function Auth({ theme, lang, onDone }: Props) {
             fullWidth
             disabled={phone.length < 9}
             onClick={() => {
-              if (phone.length >= 9) setStep("otp")
+              if (phone.length >= 9) {
+                setOtp(["", "", "", ""])
+                setStep("otp")
+                setTimeout(() => {
+                  document.getElementById("otp-0")?.focus()
+                }, 100)
+              }
             }}
           >
             {T.sendOtp}
@@ -214,18 +250,13 @@ export default function Auth({ theme, lang, onDone }: Props) {
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: C.bg }}>
       <div className="px-5 pt-14 pb-5" dir={dir}>
-        <Button
+        <BackButton
           variant="ghost"
-          size="icon-sm"
+          dir={dir}
           onClick={() => setStep(flow)}
           className="mb-5 text-[var(--muted-foreground)]"
-        >
-          {dir === "rtl" ? (
-            <IconArrowRight size={20} stroke={2} />
-          ) : (
-            <IconArrowLeft size={20} stroke={2} />
-          )}
-        </Button>
+          iconSize={20}
+        />
         <h2
           className="text-2xl font-light"
           style={{ fontFamily: "var(--font-display)", color: C.text }}
@@ -245,20 +276,20 @@ export default function Auth({ theme, lang, onDone }: Props) {
         </p>
       </div>
       <div className="flex-1 px-5 flex flex-col items-center pt-8 space-y-8">
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-3 justify-center" dir="ltr">
           {otp.map((digit, i) => (
             <input
               key={i}
               id={`otp-${i}`}
               value={digit}
+              dir="ltr"
               onChange={(e) => handleOtpChange(i, e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Backspace" && !digit && i > 0)
-                  document.getElementById(`otp-${i - 1}`)?.focus()
-              }}
+              onKeyDown={(e) => handleOtpKeyDown(i, e)}
+              onPaste={handleOtpPaste}
               className="w-14 h-14 text-center text-xl font-semibold rounded-2xl outline-none transition-all border border-[var(--border)] bg-[var(--input)] text-[var(--foreground)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--ring)]"
               inputMode="numeric"
               maxLength={1}
+              autoComplete={i === 0 ? "one-time-code" : "off"}
             />
           ))}
         </div>
@@ -270,6 +301,12 @@ export default function Auth({ theme, lang, onDone }: Props) {
           <Button
             variant="link"
             className="text-xs font-semibold text-[var(--primary)]"
+            onClick={() => {
+              setOtp(["", "", "", ""])
+              setTimeout(() => {
+                document.getElementById("otp-0")?.focus()
+              }, 50)
+            }}
           >
             {T.resend}
           </Button>

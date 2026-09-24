@@ -1,14 +1,25 @@
-import { useState } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { MY_BOOKING } from "../data"
-import { Button, Card, Badge } from "@/components/ui"
+import { MY_BOOKING, SHOPS, StaffMember } from "../data"
+import {
+  Button,
+  Card,
+  Badge,
+  showSnackbar,
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+  Rating,
+} from "@/components/ui"
 import { BottomSheet } from "@/components/ui/bottom-sheet"
+import { QrScannerBottomSheet } from "@/components/bottom-sheets"
+import { GroupBookingData, GroupBookingPerson } from "../types/booking"
 import {
   IconCalendarEvent,
   IconClock,
   IconCheck,
-  IconStarFilled,
   IconArrowLeft,
   IconArrowRight,
   IconScissors,
@@ -21,14 +32,17 @@ import {
   IconCircleCheck,
   IconInfoCircle,
   IconCamera,
+  IconChevronLeft,
+  IconChevronRight,
+  IconUser,
 } from "@tabler/icons-react"
-import ReviewBottomSheet from "../components/ReviewBottomSheet"
+import { ReviewBottomSheet } from "@/components/bottom-sheets"
 
 interface Props {
   theme: Theme
   lang: Lang
   hasActiveBooking: boolean
-  onViewQueue: () => void
+  onViewQueue: (staffId?: string) => void
   onShopSelect?: (shopId: string) => void
   onBookNew?: () => void
   onActivateBooking?: () => void
@@ -116,7 +130,16 @@ export default function BookingsScreen({
   // Mode: Default to true (New Account / First-time user)
   const [isNewAccount, setIsNewAccount] = useState<boolean>(true)
 
-  // Active QR check-in state
+  // Active QR check-in / group booking state
+  const [activeGroupBooking, setActiveGroupBooking] =
+    useState<GroupBookingData | null>(() => {
+      try {
+        const saved = localStorage.getItem("active_group_booking")
+        if (saved) return JSON.parse(saved)
+      } catch {}
+      return null
+    })
+
   const [localActiveBooking, setLocalActiveBooking] = useState<{
     shopName: string
     staffName: string
@@ -124,7 +147,118 @@ export default function BookingsScreen({
     position: number
     estimatedWait: number
     hasQrBonus: boolean
-  } | null>(null)
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem("active_group_booking")
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        return {
+          shopName: parsed.shopName,
+          staffName: parsed.staffName,
+          service: parsed.service,
+          position: parsed.position || (parsed.isClaimedSlot ? 1 : 2),
+          estimatedWait:
+            parsed.estimatedWait || (parsed.isClaimedSlot ? 5 : 24),
+          hasQrBonus: false,
+        }
+      }
+    } catch {}
+    return null
+  })
+
+  // Sync when active_group_booking changes in localStorage
+  useEffect(() => {
+    const syncActiveBooking = () => {
+      try {
+        const saved = localStorage.getItem("active_group_booking")
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          setActiveGroupBooking(parsed)
+          setLocalActiveBooking({
+            shopName: parsed.shopName,
+            staffName: parsed.staffName,
+            service: parsed.service,
+            position: parsed.position || (parsed.isClaimedSlot ? 1 : 2),
+            estimatedWait:
+              parsed.estimatedWait || (parsed.isClaimedSlot ? 5 : 24),
+            hasQrBonus: false,
+          })
+        }
+      } catch {}
+    }
+    syncActiveBooking()
+    window.addEventListener("storage", syncActiveBooking)
+    return () => window.removeEventListener("storage", syncActiveBooking)
+  }, [])
+
+  // Group persons by their assigned barber
+  const barberGroups = useMemo(() => {
+    if (
+      !activeGroupBooking?.persons ||
+      activeGroupBooking.persons.length === 0
+    ) {
+      if (localActiveBooking) {
+        return [
+          {
+            staffId: "st-default",
+            staffName: localActiveBooking.staffName,
+            staffMember: undefined,
+            persons: [
+              {
+                id: "me",
+                name: lang === "ar" ? "محمد القمودي" : "Mohammed Algamody",
+                isMe: true,
+                serviceId: "srv-1",
+                serviceName: localActiveBooking.service,
+                addonIds: [],
+                addonNames: [],
+                staffId: null,
+                staffName: localActiveBooking.staffName,
+                price: 25,
+                confirmed: true,
+              },
+            ],
+          },
+        ]
+      }
+      return []
+    }
+
+    const allStaff = SHOPS.flatMap((s) => s.staff)
+    const map = new Map<string, {
+      staffId: string
+      staffName: string
+      staffMember?: StaffMember
+      persons: GroupBookingPerson[]
+    }>()
+
+    activeGroupBooking.persons.forEach((p) => {
+      const sId = p.staffId || "any"
+      const sName =
+        p.staffName || (lang === "ar" ? "أي حلاق متاح" : "Any Barber")
+      if (!map.has(sId)) {
+        const found = allStaff.find((st) => st.id === sId)
+        map.set(sId, {
+          staffId: sId,
+          staffName: found ? found.name : sName,
+          staffMember: found,
+          persons: [],
+        })
+      }
+      map.get(sId)!.persons.push(p)
+    })
+
+    return Array.from(map.values())
+  }, [activeGroupBooking, localActiveBooking, lang])
+
+  const hasMultipleBarbers = barberGroups.length > 1
+
+  const handleViewBarberQueue = (staffId: string) => {
+    try {
+      localStorage.setItem("selected_queue_staff_id", staffId)
+    } catch {}
+    onViewQueue(staffId)
+  }
 
   const hasLiveBooking = propHasActiveBooking || localActiveBooking !== null
 
@@ -142,7 +276,6 @@ export default function BookingsScreen({
   // QR Scanner Modal states
   const [showQrScanner, setShowQrScanner] = useState(false)
   const [manualCode, setManualCode] = useState("")
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const handleReviewSubmit = (reviewData: {
     rating: number
@@ -182,12 +315,17 @@ export default function BookingsScreen({
     })
     onActivateBooking?.()
     setShowQrScanner(false)
-    setToastMessage(
-      lang === "ar"
-        ? `تم مسح QR ${shopName} بنجاح! تم حجز دورك وتفعيل مكافأة 5 د.ل الترحيبية.`
-        : `QR code scanned! Joined queue at ${shopName} with 5 LYD welcome bonus.`,
-    )
-    setTimeout(() => setToastMessage(null), 4500)
+    showSnackbar({
+      title:
+        lang === "ar"
+          ? `تم مسح QR ${shopName} بنجاح!`
+          : `QR code scanned at ${shopName}!`,
+      description:
+        lang === "ar"
+          ? "تم حجز دورك وتفعيل مكافأة 5 د.ل الترحيبية."
+          : "Joined queue with 5 LYD welcome bonus.",
+      type: "success",
+    })
   }
 
   return (
@@ -266,23 +404,6 @@ export default function BookingsScreen({
         className="flex-1 overflow-y-auto px-5 py-4 pb-28 space-y-4"
         dir={dir}
       >
-        {/* Toast Alert */}
-        {toastMessage && (
-          <div
-            className="px-4 py-3 rounded-2xl flex items-center gap-3 shadow-lg bg-emerald-500/15 border border-emerald-500/30 animate-sheet-enter"
-            dir={dir}
-          >
-            <IconCircleCheck
-              size={22}
-              stroke={2}
-              className="text-emerald-500 shrink-0"
-            />
-            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-              {toastMessage}
-            </p>
-          </div>
-        )}
-
         {/* ------------------------------------------------------------- */}
         {/* CASE A: Active Live Booking Exists (From QR scan or App booking) */}
         {/* ------------------------------------------------------------- */}
@@ -294,11 +415,7 @@ export default function BookingsScreen({
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span>
-                  {lang === "ar"
-                    ? "حجز مباشر ونشط الآن"
-                    : "Live Active Booking"}
-                </span>
+                <span>{lang === "ar" ? "حجز نشط الآن" : "Active Booking"}</span>
               </span>
               <Badge
                 variant="success"
@@ -308,75 +425,201 @@ export default function BookingsScreen({
               </Badge>
             </div>
 
-            <Card className="rounded-3xl p-5 border-[var(--primary)]/40 bg-[var(--card)] shadow-md space-y-4">
-              <div className="flex items-start justify-between">
-                <div style={{ textAlign: dir === "rtl" ? "right" : "left" }}>
-                  <h3 className="text-base font-bold text-[var(--foreground)]">
-                    {localActiveBooking?.shopName || MY_BOOKING.shopName}
-                  </h3>
-                  <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
-                    {localActiveBooking?.staffName || MY_BOOKING.staffName} ·{" "}
-                    {localActiveBooking?.service || MY_BOOKING.service}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-2xl bg-[var(--primary)] text-black flex items-center justify-center shrink-0 shadow-xs">
-                  <IconScissors size={20} stroke={2.2} />
-                </div>
-              </div>
+            {hasMultipleBarbers ? (
+              /* Group Booking with Multiple Barbers: Grouped in an Accordion */
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem
+                  value="active-barbers"
+                  className="border border-[var(--primary)]/40 bg-[var(--card)] rounded-3xl overflow-hidden shadow-md"
+                >
+                  <AccordionTrigger className="p-5 hover:no-underline cursor-pointer">
+                    <div
+                      className="space-y-1 text-start"
+                      style={{ textAlign: dir === "rtl" ? "right" : "left" }}
+                    >
+                      <h3 className="text-base font-bold text-[var(--foreground)]">
+                        {activeGroupBooking?.shopName ||
+                          localActiveBooking?.shopName}
+                      </h3>
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        {lang === "ar"
+                          ? `${barberGroups.length} حلاقين • إجمالي ${activeGroupBooking?.persons?.length || 0} أشخاص`
+                          : `${barberGroups.length} Barbers • ${activeGroupBooking?.persons?.length || 0} People`}
+                      </p>
+                    </div>
+                  </AccordionTrigger>
 
-              {/* QR First-time bonus badge (Section 4 & 8.3 of Technical Doc) */}
-              {(localActiveBooking?.hasQrBonus || isNewAccount) && (
-                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5 text-xs text-amber-600 dark:text-amber-400">
-                  <IconGift size={18} stroke={2.2} className="shrink-0" />
-                  <span className="font-semibold">
-                    {lang === "ar"
-                      ? "مكافأة أول زيارة مفعلة: 5.00 د.ل ستُودع في محفظتك فور إتمام الحلاقة!"
-                      : "First cut reward active: 5.00 LYD will be credited upon completion!"}
-                  </span>
-                </div>
-              )}
+                  <AccordionContent className="px-5 pb-5 pt-0 space-y-3">
+                    <div className="border-t border-[var(--border)]/70 pt-3 space-y-2.5">
+                      {barberGroups.map((bg, idx) => {
+                        const barberPosition =
+                          activeGroupBooking?.isClaimedSlot
+                            ? 1
+                            : bg.staffMember?.queue != null &&
+                                bg.staffMember.queue > 0
+                              ? bg.staffMember.queue
+                              : activeGroupBooking?.position ||
+                                localActiveBooking?.position ||
+                                idx + 1
 
-              {/* Position and Wait Stats */}
-              <div className="grid grid-cols-2 gap-2.5 pt-1">
-                <div className="px-3.5 py-2.5 rounded-2xl bg-[var(--secondary)]/40 border border-[var(--border)] text-center">
-                  <span className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] block font-semibold">
-                    {T.position}
-                  </span>
-                  <span className="text-xl font-bold text-[var(--primary)]">
-                    #{localActiveBooking?.position || MY_BOOKING.position}
-                  </span>
-                </div>
-                <div className="px-3.5 py-2.5 rounded-2xl bg-[var(--secondary)]/40 border border-[var(--border)] text-center">
-                  <span className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] block font-semibold">
-                    {T.approxWait}
-                  </span>
-                  <span className="text-xl font-bold text-[var(--foreground)]">
-                    ~
-                    {localActiveBooking?.estimatedWait ||
-                      MY_BOOKING.estimatedWait}{" "}
-                    {T.min}
-                  </span>
-                </div>
-              </div>
+                        return (
+                          <div
+                            key={bg.staffId}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => handleViewBarberQueue(bg.staffId)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault()
+                                handleViewBarberQueue(bg.staffId)
+                              }
+                            }}
+                            className="p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--secondary)]/30 hover:bg-[var(--secondary)]/40 active:scale-[0.99] transition-all flex items-center justify-between gap-3 shadow-2xs cursor-pointer"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              {bg.staffMember?.photo ? (
+                                <img
+                                  src={bg.staffMember.photo}
+                                  alt={bg.staffName}
+                                  className="w-11 h-11 rounded-full object-cover border border-[var(--border)] shrink-0"
+                                />
+                              ) : (
+                                <div className="w-11 h-11 rounded-full bg-[var(--primary)]/15 text-[var(--primary)] flex items-center justify-center shrink-0 font-bold">
+                                  <IconUser size={20} />
+                                </div>
+                              )}
+                              <div className="min-w-0 text-start">
+                                <div className="flex items-center gap-1.5">
+                                  <h4 className="font-bold text-sm text-[var(--foreground)] truncate">
+                                    {bg.staffName}
+                                  </h4>
+                                  {bg.staffMember?.rating && (
+                                    <Rating
+                                      value={bg.staffMember.rating}
+                                      size={11}
+                                    />
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 mt-1 mb-0.5">
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]/70"
+                                  >
+                                    {lang === "ar"
+                                      ? `العدد: ${bg.persons.length}`
+                                      : `Count: ${bg.persons.length}`}
+                                  </Badge>
+                                </div>
+                                <p className="text-[10px] text-[var(--primary)] font-medium mt-0.5">
+                                  ~{bg.staffMember?.avgWait || 20}{" "}
+                                  {lang === "ar" ? "دقيقة انتظار" : "min wait"}
+                                </p>
+                              </div>
+                            </div>
 
-              <Button
-                size="default"
-                fullWidth
-                onClick={onViewQueue}
-                className="rounded-2xl font-semibold gap-2 shadow-xs cursor-pointer h-11"
-              >
-                <span>
-                  {lang === "ar"
-                    ? "متابعة تفاصيل الطابور المباشر"
-                    : "View Live Queue"}
-                </span>
-                {dir === "rtl" ? (
-                  <IconArrowLeft size={16} />
-                ) : (
-                  <IconArrowRight size={16} />
+                            {/* الترتيب الحالي ومؤشر الانتقال */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex flex-col items-center justify-center px-2.5 py-1.5 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-2xs text-center min-w-[68px]">
+                                <span className="text-[10px] font-medium text-[var(--muted-foreground)] whitespace-nowrap leading-tight">
+                                  {lang === "ar"
+                                    ? "الترتيب الحالي"
+                                    : "Current Turn"}
+                                </span>
+                                <span className="text-base font-extrabold text-[var(--primary)] leading-tight mt-0.5">
+                                  #{barberPosition}
+                                </span>
+                              </div>
+                              <div className="text-[var(--muted-foreground)] transition-all">
+                                {dir === "rtl" ? (
+                                  <IconChevronLeft size={16} stroke={2.2} />
+                                ) : (
+                                  <IconChevronRight size={16} stroke={2.2} />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            ) : (
+              /* Single Barber Booking Card */
+              <Card className="rounded-3xl p-5 border-[var(--primary)]/40 bg-[var(--card)] shadow-md space-y-4">
+                <div className="flex items-start justify-between">
+                  <div style={{ textAlign: dir === "rtl" ? "right" : "left" }}>
+                    <h3 className="text-base font-bold text-[var(--foreground)]">
+                      {localActiveBooking?.shopName || MY_BOOKING.shopName}
+                    </h3>
+                    <p className="text-xs text-[var(--muted-foreground)] mt-0.5">
+                      {localActiveBooking?.staffName || MY_BOOKING.staffName} ·{" "}
+                      {localActiveBooking?.service || MY_BOOKING.service}
+                    </p>
+                  </div>
+                </div>
+
+                {/* QR First-time bonus badge (Section 4 & 8.3 of Technical Doc) */}
+                {(localActiveBooking?.hasQrBonus || isNewAccount) && (
+                  <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-2.5 text-xs text-amber-600 dark:text-amber-400">
+                    <IconGift size={18} stroke={2.2} className="shrink-0" />
+                    <span className="font-semibold">
+                      {lang === "ar"
+                        ? "مكافأة أول زيارة مفعلة: 5.00 د.ل ستُودع في محفظتك فور إتمام الحلاقة!"
+                        : "First cut reward active: 5.00 LYD will be credited upon completion!"}
+                    </span>
+                  </div>
                 )}
-              </Button>
-            </Card>
+
+                {/* Position and Wait Stats */}
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-[var(--secondary)]/40 border border-[var(--border)] text-center">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] block font-semibold">
+                      {T.position}
+                    </span>
+                    <span className="text-xl font-bold text-[var(--primary)]">
+                      #{localActiveBooking?.position || MY_BOOKING.position}
+                    </span>
+                  </div>
+                  <div className="px-3.5 py-2.5 rounded-2xl bg-[var(--secondary)]/40 border border-[var(--border)] text-center">
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] block font-semibold">
+                      {T.approxWait}
+                    </span>
+                    <span className="text-xl font-bold text-[var(--foreground)]">
+                      ~
+                      {localActiveBooking?.estimatedWait ||
+                        MY_BOOKING.estimatedWait}{" "}
+                      {T.min}
+                    </span>
+                  </div>
+                </div>
+
+                <Button
+                  size="default"
+                  fullWidth
+                  onClick={() => {
+                    const firstStaffId = barberGroups[0]?.staffId
+                    if (firstStaffId) {
+                      handleViewBarberQueue(firstStaffId)
+                    } else {
+                      onViewQueue()
+                    }
+                  }}
+                  className="rounded-2xl font-semibold gap-2 shadow-xs cursor-pointer h-11"
+                >
+                  <span>
+                    {lang === "ar"
+                      ? "متابعة تفاصيل الطابور المباشر"
+                      : "View Live Queue"}
+                  </span>
+                  {dir === "rtl" ? (
+                    <IconArrowLeft size={16} />
+                  ) : (
+                    <IconArrowRight size={16} />
+                  )}
+                </Button>
+              </Card>
+            )}
           </div>
         ) : null}
 
@@ -530,19 +773,11 @@ export default function BookingsScreen({
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
-                              <div className="flex gap-0.5">
-                                {Array.from({ length: 5 }).map((_, starIdx) => (
-                                  <IconStarFilled
-                                    key={starIdx}
-                                    size={12}
-                                    className={
-                                      starIdx < (bk.rating ?? 0)
-                                        ? "text-[var(--primary)]"
-                                        : "text-zinc-300 dark:text-zinc-700"
-                                    }
-                                  />
-                                ))}
-                              </div>
+                              <Rating
+                                value={bk.rating}
+                                variant="stars"
+                                size={12}
+                              />
                             </div>
                           </div>
 
@@ -612,8 +847,7 @@ export default function BookingsScreen({
 
       {/* ------------------------------------------------------------- */}
       {/* QR Scanner Interactive Bottom Sheet Modal */}
-      {/* ------------------------------------------------------------- */}
-      <BottomSheet
+      <QrScannerBottomSheet
         open={showQrScanner}
         onClose={() => setShowQrScanner(false)}
         title={lang === "ar" ? "مسح QR المركز" : "Scan Salon QR"}
@@ -622,117 +856,28 @@ export default function BookingsScreen({
             ? "وجّه الكاميرا نحو رمز QR المعروض في صالون الحلاقة"
             : "Align camera viewfinder with the salon QR code"
         }
+        lang={lang}
         dir={dir}
-      >
-        <div className="space-y-4 py-2" dir={dir}>
-          {/* Simulated High-tech Camera Viewfinder */}
-          <div className="relative w-full aspect-square max-w-[260px] mx-auto rounded-3xl bg-zinc-950 border border-zinc-800 overflow-hidden flex items-center justify-center shadow-inner">
-            {/* Grid Pattern Background */}
-            <div
-              className="absolute inset-0 opacity-15"
-              style={{
-                backgroundImage:
-                  "radial-gradient(#ffffff 1px, transparent 1px), radial-gradient(#ffffff 1px, transparent 1px)",
-                backgroundSize: "20px 20px",
-                backgroundPosition: "0 0, 10px 10px",
-              }}
-            />
-
-            {/* 4 Corner Targeting Reticles */}
-            <div className="absolute top-4 left-4 w-7 h-7 border-t-3 border-l-3 border-[var(--primary)] rounded-tl-lg" />
-            <div className="absolute top-4 right-4 w-7 h-7 border-t-3 border-r-3 border-[var(--primary)] rounded-tr-lg" />
-            <div className="absolute bottom-4 left-4 w-7 h-7 border-b-3 border-l-3 border-[var(--primary)] rounded-bl-lg" />
-            <div className="absolute bottom-4 right-4 w-7 h-7 border-b-3 border-r-3 border-[var(--primary)] rounded-br-lg" />
-
-            {/* Animated Laser Scanning Line */}
-            <div
-              className="absolute left-6 right-6 h-0.5 bg-gradient-to-r from-transparent via-[var(--primary)] to-transparent shadow-[0_0_12px_var(--primary)]"
-              style={{
-                animation: "laserScan 2.4s ease-in-out infinite",
-              }}
-            />
-
-            {/* Central QR Silhouette */}
-            <div className="text-zinc-700 flex flex-col items-center gap-2">
-              <IconQrcode size={64} stroke={1.2} className="opacity-40" />
-              <span className="text-[10px] text-zinc-400 font-mono tracking-wider">
-                SCANNING QR...
-              </span>
-            </div>
-          </div>
-
-          <p className="text-center text-xs text-[var(--muted-foreground)]">
-            {lang === "ar"
-              ? "يوجد رمز الـ QR عادةً على مكتب الاستقبال أو مرآة كرسي الحلاقة"
-              : "Look for the QR badge at the reception desk or mirror"}
-          </p>
-
-          {/* Quick Simulation Options for Demonstration */}
-          <div className="space-y-2 pt-1">
-            <label className="block text-[11px] font-bold text-[var(--muted-foreground)] text-center">
-              {lang === "ar"
-                ? "محاكاة مسح QR للمراكز (للتجربة)"
-                : "Simulate QR Scan for Centers"}
-            </label>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  handleQrCheckIn("رويال كت (Royal Cut)", "محمد الزروق")
-                }
-                className="rounded-xl text-xs h-10 border-[var(--primary)]/40 hover:bg-[var(--primary)]/10 font-bold cursor-pointer"
-              >
-                <span>رويال كت (Royal Cut)</span>
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  handleQrCheckIn(
-                    "كلاسيك باربر (Classic Barber)",
-                    "علي الورفلي",
-                  )
-                }
-                className="rounded-xl text-xs h-10 border-[var(--border)] hover:bg-[var(--secondary)] font-bold cursor-pointer"
-              >
-                <span>كلاسيك باربر</span>
-              </Button>
-            </div>
-          </div>
-
-          {/* Manual Code Fallback */}
-          {/*<div className="pt-2 border-t border-[var(--border)]/70">
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={manualCode}
-                onChange={(e) => setManualCode(e.target.value)}
-                placeholder={
-                  lang === "ar"
-                    ? "أو أدخل كود الصالون يدوياً (RC-101)..."
-                    : "Or enter code (e.g. RC-101)..."
-                }
-                className="flex-1 h-9 px-3 rounded-xl bg-[var(--secondary)]/40 border border-[var(--border)] text-xs text-[var(--foreground)] outline-none focus:border-[var(--primary)] font-mono"
-                dir={dir}
-              />
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (manualCode.trim()) {
-                    handleQrCheckIn("صالون الحلاقة (كود يدوي)", "الحلاق المتاح")
-                  }
-                }}
-                disabled={!manualCode.trim()}
-                className="rounded-xl h-9 px-3.5 text-xs font-bold cursor-pointer"
-              >
-                {lang === "ar" ? "تأكيد" : "Confirm"}
-              </Button>
-            </div>
-          </div>*/}
-        </div>
-      </BottomSheet>
+        simulateOptions={[
+          {
+            label: "رويال كت (Royal Cut)",
+            shopName: "رويال كت (Royal Cut)",
+            staffName: "محمد الزروق",
+          },
+          {
+            label: "كلاسيك باربر",
+            shopName: "كلاسيك باربر (Classic Barber)",
+            staffName: "علي الورفلي",
+          },
+        ]}
+        onScanSuccess={(data) => {
+          setShowQrScanner(false)
+          handleQrCheckIn(
+            data?.shopName || "رويال كت (Royal Cut)",
+            data?.staffName || "محمد الزروق",
+          )
+        }}
+      />
 
       {/* Review BottomSheet Modal when rating an unrated past booking */}
       {reviewingBooking && (
@@ -786,15 +931,6 @@ export default function BookingsScreen({
           </div>
         </div>
       )}
-
-      {/* Keyframe animation for QR scanner laser */}
-      <style>{`
-        @keyframes laserScan {
-          0% { top: 12%; opacity: 0.8; }
-          50% { top: 86%; opacity: 1; }
-          100% { top: 12%; opacity: 0.8; }
-        }
-      `}</style>
     </div>
   )
 }

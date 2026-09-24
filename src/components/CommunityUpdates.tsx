@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react"
-import { Badge, Button, Card } from "@/components/ui"
+import { Badge, Button, Card, StatusChip, BackButton } from "@/components/ui"
 import {
-  IconArrowLeft,
-  IconArrowRight,
   IconX,
   IconClock,
   IconDoor,
@@ -18,7 +16,7 @@ import {
   CommunityReport,
   formatTimeHM,
 } from "../data"
-import CommunityUpdateBottomSheet from "./CommunityUpdateBottomSheet"
+import { CommunityUpdateBottomSheet } from "@/components/bottom-sheets"
 
 export interface CommunityUpdatesProps {
   shopId?: string
@@ -84,7 +82,8 @@ export default function CommunityUpdates({
   }, [communityData])
 
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false)
-  const [selectedPhotoPreview, setSelectedPhotoPreview] = useState<string | null>(null)
+  const [selectedPhotoPreview, setSelectedPhotoPreview] =
+    useState<string | null>(null)
   const [likedReports, setLikedReports] = useState<Record<string, boolean>>({})
 
   if (open !== undefined && !open) return null
@@ -146,7 +145,10 @@ export default function CommunityUpdates({
     setData(updated)
     if (shopId) {
       try {
-        localStorage.setItem(`community_data_${shopId}`, JSON.stringify(updated))
+        localStorage.setItem(
+          `community_data_${shopId}`,
+          JSON.stringify(updated),
+        )
       } catch {}
     }
     if (onUpdateCommunityData) {
@@ -164,18 +166,13 @@ export default function CommunityUpdates({
       {/* Top Header - Symmetrically Centered Navigation Bar */}
       <div className="pt-12 pb-3 px-4 border-b border-[var(--border)] bg-[var(--card)]/95 backdrop-blur-md shrink-0 relative flex items-center justify-center min-h-[82px] shadow-xs">
         {/* Back button positioned absolutely on start edge */}
-        <button
-          type="button"
+        <BackButton
+          dir={dir}
           onClick={handleBack}
-          className="absolute start-4 bottom-3 w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)]/50 flex items-center justify-center text-[var(--foreground)] transition-transform active:scale-90 cursor-pointer shadow-xs z-20"
-          title={lang === "ar" ? "رجوع" : "Back"}
-        >
-          {dir === "rtl" ? (
-            <IconArrowRight size={20} stroke={2.2} />
-          ) : (
-            <IconArrowLeft size={20} stroke={2.2} />
-          )}
-        </button>
+          className="absolute start-4 bottom-3 w-10 h-10 border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--muted)]/50 z-20"
+          iconSize={20}
+          iconStroke={2.2}
+        />
 
         {/* Title & subtitle: strictly mathematically centered */}
         <div className="flex flex-col items-center justify-center text-center max-w-[calc(100%-100px)] z-10 pointer-events-none">
@@ -190,7 +187,7 @@ export default function CommunityUpdates({
       </div>
 
       {/* Scrollable Page Body */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-28">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-10">
         {/* Status & Timing Overview Card */}
         <Card className="p-5 rounded-3xl border-[var(--border)] bg-[var(--card)] shadow-xs space-y-4">
           {/* Big Count in Center & Smaller Last Update Time */}
@@ -272,7 +269,8 @@ export default function CommunityUpdates({
               {data.reports.map((report) => {
                 const repTimeFormatted = formatTimeHM(report.time, lang)
                 const isLiked = likedReports[report.id]
-                const currentLikes = (report.confirmedCount || 0) + (isLiked ? 1 : 0)
+                const currentLikes =
+                  (report.confirmedCount || 0) + (isLiked ? 1 : 0)
 
                 return (
                   <Card
@@ -298,7 +296,6 @@ export default function CommunityUpdates({
                             <span className="text-sm font-bold text-[var(--foreground)]">
                               {report.userName}
                             </span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           </div>
                           <span className="text-[10px] text-[var(--muted-foreground)] flex items-center gap-1">
                             <IconClock size={11} />
@@ -308,24 +305,25 @@ export default function CommunityUpdates({
                       </div>
 
                       {/* Status Tag */}
-                      <Badge
-                        variant={report.isOpen ? "success" : "destructive"}
-                        size="sm"
-                        className="font-bold gap-1 px-2.5"
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            report.isOpen ? "bg-emerald-400" : "bg-red-400"
-                          }`}
+                      {report.isOpen ? (
+                        <div className="flex flex-col items-center shrink-0">
+                          <StatusChip isOpen={true} lang={lang} />
+                          {report.waitingCount !== undefined &&
+                            report.waitingCount !== null && (
+                              <span className="text-[11px] font-semibold text-[var(--muted-foreground)] mt-0.5">
+                                {lang === "ar"
+                                  ? `العدد: ${report.waitingCount}`
+                                  : `Count: ${report.waitingCount}`}
+                              </span>
+                            )}
+                        </div>
+                      ) : (
+                        <StatusChip
+                          isOpen={false}
+                          lang={lang}
+                          className="shrink-0"
                         />
-                        {report.isOpen
-                          ? `${T.open}${
-                              report.waitingCount
-                                ? ` · ${report.waitingCount} ${T.waiting}`
-                                : ""
-                            }`
-                          : T.closed}
-                      </Badge>
+                      )}
                     </div>
 
                     {/* Report Text Note (Review Content) */}
@@ -338,7 +336,9 @@ export default function CommunityUpdates({
                     {/* Attached Proof Photo */}
                     {report.photo && (
                       <div
-                        onClick={() => setSelectedPhotoPreview(report.photo || null)}
+                        onClick={() =>
+                          setSelectedPhotoPreview(report.photo || null)
+                        }
                         className="relative h-36 rounded-2xl overflow-hidden border border-[var(--border)] cursor-pointer group bg-black/30"
                       >
                         <img
@@ -357,7 +357,9 @@ export default function CommunityUpdates({
                     {/* Footer / helpful reaction */}
                     <div className="flex items-center justify-between pt-1 border-t border-[var(--border)]/40 text-xs">
                       <span className="text-[11px] text-[var(--muted-foreground)]">
-                        {lang === "ar" ? "تقييم مفيد للزبائن" : "Helpful report"}
+                        {lang === "ar"
+                          ? "تقييم مفيد للزبائن"
+                          : "Helpful report"}
                       </span>
                       <button
                         type="button"

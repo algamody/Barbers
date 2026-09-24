@@ -11,18 +11,18 @@ import {
   Input,
   Badge,
   BottomSheet,
+  showSnackbar,
 } from "@/components/ui"
+import { NavCard } from "@/components/ui/custom"
 import {
   IconUser,
   IconSun,
   IconMoon,
   IconWorld,
-  IconFileText,
   IconBell,
   IconHelp,
   IconFileDescription,
   IconLogout,
-  IconStarFilled,
   IconChevronRight,
   IconChevronLeft,
   IconChevronDown,
@@ -33,6 +33,9 @@ import {
   IconPhone,
   IconMail,
   IconTrash,
+  IconLoader2,
+  IconWallet,
+  IconSparkles,
 } from "@tabler/icons-react"
 import ChangePhoneScreen from "./ChangePhoneScreen"
 
@@ -44,7 +47,6 @@ interface Props {
   onToggleLang?: () => void
   onSelectLang: (lang: Lang) => void
   onLogout: () => void
-  onExport: () => void
   onViewBookings?: () => void
   onViewWallet?: () => void
   onViewPoints?: () => void
@@ -81,7 +83,6 @@ export default function Profile({
   onToggleTheme,
   onSelectLang,
   onLogout,
-  onExport,
   onViewBookings,
   onViewWallet,
   onViewPoints,
@@ -115,8 +116,10 @@ export default function Profile({
   const [showEditProfileSheet, setShowEditProfileSheet] = useState(false)
   const [editName, setEditName] = useState(userProfile.name)
   const [editEmail, setEditEmail] = useState(userProfile.email)
-  const [editAvatar, setEditAvatar] = useState<string | null>(userProfile.avatar)
-  const [profileSavedFeedback, setProfileSavedFeedback] = useState(false)
+  const [editAvatar, setEditAvatar] = useState<string | null>(
+    userProfile.avatar,
+  )
+  const [isSavingProfile, setIsSavingProfile] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Full Screen Phone Change state
@@ -128,26 +131,36 @@ export default function Profile({
       setEditName(userProfile.name)
       setEditEmail(userProfile.email)
       setEditAvatar(userProfile.avatar)
-      setProfileSavedFeedback(false)
+      setIsSavingProfile(false)
     }
   }, [showEditProfileSheet, userProfile])
 
   const handleSaveProfile = () => {
+    if (isSavingProfile) return
+    setIsSavingProfile(true)
+
     const updated = {
       ...userProfile,
       name: editName.trim() || userProfile.name,
       email: editEmail.trim() || userProfile.email,
       avatar: editAvatar,
     }
-    setUserProfile(updated)
-    try {
-      localStorage.setItem("user_profile", JSON.stringify(updated))
-    } catch {}
-    setProfileSavedFeedback(true)
+
     setTimeout(() => {
+      setUserProfile(updated)
+      try {
+        localStorage.setItem("user_profile", JSON.stringify(updated))
+      } catch {}
+      setIsSavingProfile(false)
       setShowEditProfileSheet(false)
-      setProfileSavedFeedback(false)
-    }, 600)
+      showSnackbar({
+        title:
+          lang === "ar"
+            ? "تم تحديث البيانات الشخصية بنجاح"
+            : "Personal details updated successfully",
+        type: "success",
+      })
+    }, 650)
   }
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -192,7 +205,10 @@ export default function Profile({
               {userProfile.name}
             </h2>
             <p className="text-sm mt-0.5 text-[var(--muted-foreground)]">
-              <span dir="ltr" className="font-sans font-medium inline-block tracking-tight">
+              <span
+                dir="ltr"
+                className="font-sans font-medium inline-block tracking-tight"
+              >
                 {userProfile.phone}
               </span>
             </p>
@@ -205,7 +221,10 @@ export default function Profile({
             className="relative group cursor-pointer focus:outline-none transition-transform active:scale-95"
             title={lang === "ar" ? "تعديل الملف الشخصي" : "Edit Profile"}
           >
-            <Avatar size="lg" className="ring-2 ring-transparent group-hover:ring-[var(--primary)] transition-all">
+            <Avatar
+              size="lg"
+              className="ring-2 ring-transparent group-hover:ring-[var(--primary)] transition-all"
+            >
               {userProfile.avatar ? (
                 <AvatarImage src={userProfile.avatar} alt={userProfile.name} />
               ) : (
@@ -220,42 +239,25 @@ export default function Profile({
           </button>
         </div>
 
-        {/* Balance & Points Cards using unified Card */}
+        {/* Balance & Points Cards using NavCard with side chevron and faint watermark icons */}
         <div className="grid grid-cols-2 gap-3 mt-5" dir={dir}>
-          <Card
+          <NavCard
             onClick={onViewWallet}
-            className="rounded-2xl px-4 py-4 border-[var(--border)] bg-[var(--card)] cursor-pointer hover:border-[var(--primary)]/50 hover:bg-[var(--secondary)]/30 transition-all active:scale-[0.98]"
-          >
-            <p className="text-xs tracking-widest uppercase mb-1 text-[var(--muted-foreground)] font-semibold">
-              {lang === "ar" ? "المحفظة" : "Wallet"}
-            </p>
-            <p className="text-2xl font-bold text-[var(--foreground)]">48</p>
-            <p className="text-xs text-[var(--muted-foreground)]">{T.dinar}</p>
-          </Card>
-          <Card
+            dir={dir}
+            label={lang === "ar" ? "المحفظة" : "Wallet"}
+            value="48.00"
+            subtext={T.dinar}
+            bgIcon={<IconWallet size={48} stroke={1.4} />}
+          />
+          <NavCard
             onClick={onViewPoints}
-            className="rounded-2xl px-4 py-4 border-[var(--border)] bg-[var(--card)] cursor-pointer hover:border-[var(--primary)]/50 hover:bg-[var(--secondary)]/30 transition-all active:scale-[0.98]"
-          >
-            <p className="text-xs tracking-widest uppercase mb-1 text-[var(--muted-foreground)] font-semibold">
-              {T.points}
-            </p>
-            <p className="text-2xl font-bold text-[var(--foreground)]">
-              {points}
-            </p>
-            <p className="text-xs text-[var(--muted-foreground)]">
-              {T.rewardPoints}
-            </p>
-          </Card>
+            dir={dir}
+            label={T.points}
+            value={points}
+            subtext={T.rewardPoints}
+            bgIcon={<IconSparkles size={48} stroke={1.4} />}
+          />
         </div>
-
-        <Button
-          size="default"
-          fullWidth
-          onClick={onViewWallet}
-          className="mt-3 cursor-pointer"
-        >
-          {T.topUp}
-        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5" dir={dir}>
@@ -267,6 +269,16 @@ export default function Profile({
             onClick={onViewBookings}
             className="w-full flex items-center justify-between px-4 py-4 border-b border-[var(--border)] transition-colors hover:bg-[var(--secondary)]/40 cursor-pointer"
           >
+            <div className="flex items-center gap-3">
+              <IconHistory
+                size={18}
+                stroke={2}
+                className="text-[var(--foreground)]"
+              />
+              <span className="text-sm font-medium text-[var(--foreground)]">
+                {T.visitHistory}
+              </span>
+            </div>
             <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
               {dir === "rtl" ? (
                 <IconChevronLeft size={16} stroke={2} />
@@ -274,23 +286,25 @@ export default function Profile({
                 <IconChevronRight size={16} stroke={2} />
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-[var(--foreground)]">
-                {T.visitHistory}
-              </span>
-              <IconHistory
-                size={18}
-                stroke={2}
-                className="text-[var(--foreground)]"
-              />
-            </div>
           </button>
 
           {/* Theme toggle */}
           <button
             onClick={onToggleTheme}
-            className="w-full flex items-center justify-between px-4 py-4 border-b border-[var(--border)] transition-colors hover:bg-[var(--secondary)]/40"
+            className="w-full flex items-center justify-between px-4 py-4 border-b border-[var(--border)] transition-colors hover:bg-[var(--secondary)]/40 cursor-pointer"
           >
+            <div className="flex items-center gap-3">
+              <span className="text-[var(--foreground)]">
+                {isDark ? (
+                  <IconMoon size={18} stroke={2} />
+                ) : (
+                  <IconSun size={18} stroke={2} />
+                )}
+              </span>
+              <span className="text-sm font-medium text-[var(--foreground)]">
+                {isDark ? T.darkMode : T.lightMode}
+              </span>
+            </div>
             <div
               className="relative w-11 h-6 rounded-full transition-colors duration-300 flex items-center"
               style={{ backgroundColor: isDark ? C.gold : C.border }}
@@ -304,25 +318,23 @@ export default function Profile({
                 }}
               />
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-[var(--foreground)]">
-                {isDark ? T.darkMode : T.lightMode}
-              </span>
-              <span className="text-[var(--foreground)]">
-                {isDark ? (
-                  <IconMoon size={18} stroke={2} />
-                ) : (
-                  <IconSun size={18} stroke={2} />
-                )}
-              </span>
-            </div>
           </button>
 
           {/* Language selector button (opens bottom sheet modal) */}
           <button
             onClick={() => setShowLangDrawer(true)}
-            className="w-full flex items-center justify-between px-4 py-4 border-b border-[var(--border)] transition-colors hover:bg-[var(--secondary)]/40"
+            className="w-full flex items-center justify-between px-4 py-4 border-b border-[var(--border)] transition-colors hover:bg-[var(--secondary)]/40 cursor-pointer"
           >
+            <div className="flex items-center gap-3">
+              <IconWorld
+                size={18}
+                stroke={2}
+                className="text-[var(--foreground)]"
+              />
+              <span className="text-sm font-medium text-[var(--foreground)]">
+                {T.language}
+              </span>
+            </div>
             <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
               <span>{lang === "ar" ? "العربية" : "English"}</span>
               {dir === "rtl" ? (
@@ -330,16 +342,6 @@ export default function Profile({
               ) : (
                 <IconChevronRight size={16} stroke={2} />
               )}
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-[var(--foreground)]">
-                {T.language}
-              </span>
-              <IconWorld
-                size={18}
-                stroke={2}
-                className="text-[var(--foreground)]"
-              />
             </div>
           </button>
 
@@ -349,46 +351,22 @@ export default function Profile({
             onClick={() => setShowFeedbackSheet(true)}
             className="w-full flex items-center justify-between px-4 py-4 border-b border-[var(--border)] transition-colors hover:bg-[var(--secondary)]/40 cursor-pointer"
           >
+            <div className="flex items-center gap-3">
+              <IconMessageDots
+                size={18}
+                stroke={2}
+                className="text-[var(--foreground)]"
+              />
+              <span className="text-sm font-medium text-[var(--foreground)]">
+                {lang === "ar" ? "شاركنا برأيك" : "Share Your Feedback"}
+              </span>
+            </div>
             <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
               {dir === "rtl" ? (
                 <IconChevronLeft size={16} stroke={2} />
               ) : (
                 <IconChevronRight size={16} stroke={2} />
               )}
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-[var(--foreground)]">
-                {lang === "ar" ? "شاركنا برأيك" : "Share Your Feedback"}
-              </span>
-              <IconMessageDots
-                size={18}
-                stroke={2}
-                className="text-[var(--foreground)]"
-              />
-            </div>
-          </button>
-
-          {/* Export PDF */}
-          <button
-            onClick={onExport}
-            className="w-full flex items-center justify-between px-4 py-4 border-b border-[var(--border)] transition-colors hover:bg-[var(--secondary)]/40"
-          >
-            <span className="text-[var(--muted-foreground)]">
-              {dir === "rtl" ? (
-                <IconChevronLeft size={16} stroke={2} />
-              ) : (
-                <IconChevronRight size={16} stroke={2} />
-              )}
-            </span>
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-[var(--foreground)]">
-                {lang === "ar" ? "تصدير الشاشات PDF" : "Export Screens PDF"}
-              </span>
-              <IconFileText
-                size={18}
-                stroke={2}
-                className="text-[var(--foreground)]"
-              />
             </div>
           </button>
 
@@ -402,6 +380,16 @@ export default function Profile({
                 i < arr.length - 1 ? "border-b border-[var(--border)]" : ""
               }`}
             >
+              <div className="flex items-center gap-3">
+                <Icon
+                  size={18}
+                  stroke={2}
+                  className="text-[var(--foreground)]"
+                />
+                <span className="text-sm font-medium text-[var(--foreground)]">
+                  {label}
+                </span>
+              </div>
               <span className="text-[var(--muted-foreground)]">
                 {dir === "rtl" ? (
                   <IconChevronLeft size={16} stroke={2} />
@@ -409,16 +397,6 @@ export default function Profile({
                   <IconChevronRight size={16} stroke={2} />
                 )}
               </span>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-[var(--foreground)]">
-                  {label}
-                </span>
-                <Icon
-                  size={18}
-                  stroke={2}
-                  className="text-[var(--foreground)]"
-                />
-              </div>
             </div>
           ))}
         </Card>
@@ -454,6 +432,14 @@ export default function Profile({
                 : "hover:bg-[var(--secondary)]/40 border border-transparent"
             } ${pendingLang === "ar" ? "animate-select-pulse" : ""}`}
           >
+            {/* Text and Flag */}
+            <div className="flex items-center gap-3">
+              <span className="text-2xl leading-none">🇱🇾</span>
+              <span className="text-base font-semibold text-[var(--foreground)]">
+                العربية (Arabic)
+              </span>
+            </div>
+
             {/* Radio Indicator */}
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
@@ -465,14 +451,6 @@ export default function Profile({
               {(pendingLang === "ar" || (!pendingLang && lang === "ar")) && (
                 <IconCheck size={14} stroke={3.5} />
               )}
-            </div>
-
-            {/* Text and Flag */}
-            <div className="flex items-center gap-3">
-              <span className="text-base font-semibold text-[var(--foreground)]">
-                العربية (Arabic)
-              </span>
-              <span className="text-2xl leading-none">🇱🇾</span>
             </div>
           </button>
 
@@ -486,6 +464,14 @@ export default function Profile({
                 : "hover:bg-[var(--secondary)]/40 border border-transparent"
             } ${pendingLang === "en" ? "animate-select-pulse" : ""}`}
           >
+            {/* Text and Flag */}
+            <div className="flex items-center gap-3">
+              <span className="text-2xl leading-none">🇺🇸</span>
+              <span className="text-base font-semibold text-[var(--foreground)]">
+                الإنجليزية (English)
+              </span>
+            </div>
+
             {/* Radio Indicator */}
             <div
               className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
@@ -497,14 +483,6 @@ export default function Profile({
               {(pendingLang === "en" || (!pendingLang && lang === "en")) && (
                 <IconCheck size={14} stroke={3.5} />
               )}
-            </div>
-
-            {/* Text and Flag */}
-            <div className="flex items-center gap-3">
-              <span className="text-base font-semibold text-[var(--foreground)]">
-                الإنجليزية (English)
-              </span>
-              <span className="text-2xl leading-none">🇺🇸</span>
             </div>
           </button>
         </div>
@@ -590,7 +568,10 @@ export default function Profile({
               className="relative group cursor-pointer"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Avatar size="xl" className="w-20 h-20 shadow-md ring-4 ring-[var(--primary)]/20">
+              <Avatar
+                size="xl"
+                className="w-20 h-20 shadow-md ring-4 ring-[var(--primary)]/20"
+              >
                 {editAvatar ? (
                   <AvatarImage src={editAvatar} alt={editName} />
                 ) : (
@@ -618,7 +599,9 @@ export default function Profile({
                 className="text-xs font-bold text-[var(--primary)] hover:underline cursor-pointer flex items-center gap-1"
               >
                 <IconCamera size={13} />
-                <span>{lang === "ar" ? "تغيير الصورة الشخصية" : "Change Photo"}</span>
+                <span>
+                  {lang === "ar" ? "تغيير الصورة الشخصية" : "Change Photo"}
+                </span>
               </button>
               {editAvatar && (
                 <button
@@ -642,7 +625,12 @@ export default function Profile({
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
               placeholder={lang === "ar" ? "محمد القمودي" : "Your Name"}
-              startIcon={<IconUser size={18} className="text-[var(--muted-foreground)]" />}
+              startIcon={
+                <IconUser
+                  size={18}
+                  className="text-[var(--muted-foreground)]"
+                />
+              }
               className="h-12 rounded-2xl"
               dir={dir}
             />
@@ -658,9 +646,14 @@ export default function Profile({
               value={editEmail}
               onChange={(e) => setEditEmail(e.target.value)}
               placeholder="example@mail.com"
-              startIcon={<IconMail size={18} className="text-[var(--muted-foreground)]" />}
+              startIcon={
+                <IconMail
+                  size={18}
+                  className="text-[var(--muted-foreground)]"
+                />
+              }
               className="h-12 rounded-2xl"
-              dir="ltr"
+              dir={dir}
             />
           </div>
 
@@ -671,8 +664,14 @@ export default function Profile({
             </label>
             <div className="flex items-center justify-between p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--card-alt)] transition-all">
               <div className="flex items-center gap-2.5">
-                <IconPhone size={18} className="text-[var(--muted-foreground)] shrink-0" />
-                <span dir="ltr" className="font-semibold text-sm text-[var(--foreground)] font-sans">
+                <IconPhone
+                  size={18}
+                  className="text-[var(--muted-foreground)] shrink-0"
+                />
+                <span
+                  dir="ltr"
+                  className="font-semibold text-sm text-[var(--foreground)] font-sans"
+                >
                   {userProfile.phone}
                 </span>
               </div>
@@ -694,18 +693,19 @@ export default function Profile({
             <Button
               size="lg"
               fullWidth
+              disabled={isSavingProfile}
               onClick={handleSaveProfile}
-              className={`h-12 rounded-2xl font-bold shadow-md cursor-pointer transition-all ${
-                profileSavedFeedback ? "bg-emerald-600 hover:bg-emerald-600 text-white" : ""
-              }`}
+              className="h-12 rounded-2xl font-bold shadow-md cursor-pointer transition-all disabled:opacity-85"
             >
-              {profileSavedFeedback ? (
+              {isSavingProfile ? (
                 <span className="flex items-center justify-center gap-2">
-                  <IconCheck size={18} stroke={3} />
-                  <span>{lang === "ar" ? "تم الحفظ بنجاح" : "Saved successfully"}</span>
+                  <IconLoader2 size={20} className="animate-spin" />
+                  <span>{lang === "ar" ? "جاري الحفظ..." : "Saving..."}</span>
                 </span>
+              ) : lang === "ar" ? (
+                "حفظ التغييرات"
               ) : (
-                lang === "ar" ? "حفظ التغييرات" : "Save Changes"
+                "Save Changes"
               )}
             </Button>
           </div>

@@ -1,21 +1,15 @@
 import { useState } from "react"
-import { SHOPS, isCommunityStatusActive, formatTimeHM } from "../data"
+import { SHOPS } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Input, Card, Badge } from "@/components/ui"
+import { Button, Card, SearchBar, ShopCard } from "@/components/ui"
 import {
-  IconSearch,
   IconBell,
   IconSun,
   IconMoon,
-  IconClock,
-  IconStarFilled,
-  IconCheck,
   IconChevronLeft,
   IconChevronRight,
   IconHeart,
-  IconX,
-  IconUsers,
 } from "@tabler/icons-react"
 
 interface Props {
@@ -131,20 +125,14 @@ export default function Home({
           </div>
         </div>
 
-        {/* Search input with Tabler IconSearch */}
+        {/* Search input with unified SearchBar */}
         <div className="mt-4">
-          <Input
+          <SearchBar
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={setQuery}
             placeholder={T.search}
+            lang={lang}
             dir={dir}
-            startIcon={
-              <IconSearch
-                size={18}
-                stroke={2}
-                className="text-[var(--muted-foreground)]"
-              />
-            }
           />
         </div>
       </div>
@@ -199,136 +187,18 @@ export default function Home({
         </div>
       )}
 
-      {/* Shops list using unified Card component */}
+      {/* Shops list using unified ShopCard component */}
       <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-3" dir={dir}>
         {filtered.map((shop) => (
-          <Card
+          <ShopCard
             key={shop.id}
-            interactive
+            shop={shop}
+            isFavorite={favorites.includes(shop.id)}
+            onToggleFavorite={onToggleFavorite}
             onClick={() => onShopSelect(shop.id)}
-            className="overflow-hidden rounded-2xl border-[var(--border)] bg-[var(--card)] p-0"
-            style={{ textAlign: dir === "rtl" ? "right" : "left" }}
-          >
-            <div className="relative h-36 w-full overflow-hidden bg-[var(--card-alt)]">
-              <img
-                src={shop.photo}
-                alt={shop.name}
-                className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-              />
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)",
-                }}
-              />
-              {shop.isOpen && (
-                <div className="absolute top-3 right-3">
-                  <Badge
-                    variant="success"
-                    size="sm"
-                    className="bg-black/60 backdrop-blur-md gap-1 font-semibold"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                    {T.open}
-                  </Badge>
-                </div>
-              )}
-              {!shop.isOpen && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-[1.5px] flex items-center justify-center z-10 pointer-events-none">
-                  <Badge
-                    variant="destructive"
-                    className="bg-black/80 border border-red-500/60 text-white text-sm font-bold px-4 py-1.5 shadow-2xl backdrop-blur-md gap-2"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-red-500" />
-                    <span>{T.closed}</span>
-                  </Badge>
-                </div>
-              )}
-              {isCommunityStatusActive(shop) && (
-                <div className="absolute top-3 left-3 z-20">
-                  <Badge
-                    variant="subtle"
-                    size="sm"
-                    className="bg-black/65 backdrop-blur-md text-[10px] text-zinc-200 border-amber-500/30 gap-1 font-medium"
-                  >
-                    <IconUsers size={13} stroke={2} className="text-[var(--primary)]" />
-                    {T.communityUpdateWithTime(
-                      formatTimeHM(shop.communityUpdate?.updatedAt, lang),
-                    )}
-                  </Badge>
-                </div>
-              )}
-              {shop.isOpen && (
-                <div className="absolute bottom-3 right-3 flex items-center gap-1 text-xs text-white">
-                  <IconClock
-                    size={13}
-                    stroke={2}
-                    className="text-[var(--primary)]"
-                  />
-                  <span>
-                    {shop.waitingCount} {T.waiting}
-                  </span>
-                </div>
-              )}
-              {/* Quick Favorite Toggle Button */}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  e.preventDefault()
-                  onToggleFavorite(shop.id)
-                }}
-                className="absolute bottom-3 left-3 z-20 w-8 h-8 rounded-full bg-black/65 backdrop-blur-md flex items-center justify-center transition-transform active:scale-85 hover:scale-110 cursor-pointer shadow-md"
-                title={
-                  favorites.includes(shop.id)
-                    ? lang === "ar"
-                      ? "إزالة من المفضلة"
-                      : "Remove from favorites"
-                    : lang === "ar"
-                      ? "إضافة للمفضلة"
-                      : "Add to favorites"
-                }
-              >
-                <IconHeart
-                  size={16}
-                  stroke={2}
-                  className={
-                    favorites.includes(shop.id)
-                      ? "text-rose-500 fill-rose-500"
-                      : "text-white"
-                  }
-                />
-              </button>
-            </div>
-            <div className="px-4 py-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <IconStarFilled size={13} className="text-[var(--primary)]" />
-                  <span className="text-xs font-semibold text-[var(--foreground)]">
-                    {shop.rating}
-                  </span>
-                  <span className="text-xs text-[var(--muted-foreground)]">
-                    ({shop.reviewCount})
-                  </span>
-                </div>
-                <p className="font-semibold text-sm text-[var(--foreground)] flex items-center">
-                  {lang === "ar" ? shop.nameAr : shop.name}
-                  {shop.isVerified && (
-                    <IconCheck
-                      size={14}
-                      stroke={3}
-                      className="mr-1 text-[var(--primary)]"
-                    />
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center justify-between mt-1 text-xs text-[var(--muted-foreground)]">
-                <span>{shop.distance}</span>
-                <p>{shop.address}</p>
-              </div>
-            </div>
-          </Card>
+            lang={lang}
+            dir={dir}
+          />
         ))}
       </div>
     </div>

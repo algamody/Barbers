@@ -1,4 +1,5 @@
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import { Button } from "./button"
 import {
@@ -52,6 +53,34 @@ export function AlertDialog({
   const open = openProp ?? isOpen ?? false
   const [rendered, setRendered] = React.useState(open)
   const [isClosing, setIsClosing] = React.useState(false)
+
+  // Portal node detection to ensure backdrop covers the full phone screen (including main tabs)
+  const [portalNode, setPortalNode] = React.useState<HTMLElement | null>(() => {
+    if (typeof document !== "undefined") {
+      return (
+        document.getElementById("phone-frame") ||
+        document.querySelector<HTMLElement>("[data-phone-frame]") ||
+        document.body
+      )
+    }
+    return null
+  })
+
+  React.useEffect(() => {
+    const updateTarget = () => {
+      const frame =
+        document.getElementById("phone-frame") ||
+        document.querySelector<HTMLElement>("[data-phone-frame]") ||
+        (typeof document !== "undefined" ? document.body : null)
+      if (frame && frame !== portalNode) {
+        setPortalNode(frame)
+      }
+    }
+    updateTarget()
+    const observer = new MutationObserver(updateTarget)
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [portalNode])
 
   React.useEffect(() => {
     if (open) {
@@ -133,12 +162,24 @@ export function AlertDialog({
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  const isInsideFrame =
+    !!portalNode &&
+    (portalNode.id === "phone-frame" ||
+      portalNode.hasAttribute("data-phone-frame"))
+  const posClass = isInsideFrame ? "absolute" : "fixed"
+
+  const content = (
+    <div
+      className={cn(
+        posClass,
+        "inset-0 z-[100] flex items-center justify-center p-4",
+      )}
+    >
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 bg-black/65 backdrop-blur-xs",
+          posClass,
+          "inset-0 bg-black/70 backdrop-blur-xs",
           isClosing ? "animate-backdrop-exit" : "animate-backdrop-enter",
         )}
         onClick={() => !preventBackdropClose && !isClosing && onClose()}
@@ -213,6 +254,12 @@ export function AlertDialog({
       </div>
     </div>
   )
+
+  if (portalNode) {
+    return createPortal(content, portalNode)
+  }
+
+  return content
 }
 
 export default AlertDialog

@@ -1,13 +1,8 @@
 import { useState } from "react"
-import { BottomSheet } from "./ui/bottom-sheet"
-import { Button, Textarea } from "@/components/ui"
-import {
-  IconCheck,
-  IconStarFilled,
-  IconCamera,
-  IconX,
-} from "@tabler/icons-react"
-import { Lang } from "../i18n"
+import { BottomSheet } from "@/components/ui/bottom-sheet"
+import { Button, Textarea, Rating } from "@/components/ui"
+import { IconCheck, IconCamera, IconX } from "@tabler/icons-react"
+import { Lang } from "@/i18n"
 
 export interface ReviewBottomSheetProps {
   open: boolean
@@ -25,7 +20,7 @@ export interface ReviewBottomSheetProps {
   }) => void
 }
 
-export default function ReviewBottomSheet({
+export function ReviewBottomSheet({
   open,
   onClose,
   lang = "ar",
@@ -99,26 +94,13 @@ export default function ReviewBottomSheet({
                 {lang === "ar" ? "التقييم العام" : "Overall Rating"}
               </label>
               <div className="flex items-center gap-2">
-                {[1, 2, 3, 4, 5].map((star) => (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setNewRating(star)}
-                    className="p-1 hover:scale-110 transition-transform cursor-pointer"
-                  >
-                    <IconStarFilled
-                      size={28}
-                      className={
-                        star <= newRating
-                          ? "text-[var(--primary)]"
-                          : "text-zinc-300 dark:text-zinc-700"
-                      }
-                    />
-                  </button>
-                ))}
-                <span className="text-xs font-bold text-[var(--foreground)] mr-2">
-                  {newRating} / 5
-                </span>
+                <Rating
+                  value={newRating}
+                  variant="interactive"
+                  size={28}
+                  onChange={(val) => setNewRating(val)}
+                  showScore
+                />
               </div>
             </div>
 
@@ -235,3 +217,5 @@ export default function ReviewBottomSheet({
     </BottomSheet>
   )
 }
+
+export default ReviewBottomSheet

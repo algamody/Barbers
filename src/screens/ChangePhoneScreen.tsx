@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from "react"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Input, Card } from "@/components/ui"
+import { Button, Input, Card, BackButton } from "@/components/ui"
 import {
-  IconArrowRight,
-  IconArrowLeft,
   IconDeviceMobile,
   IconShieldCheck,
   IconCheck,
@@ -95,12 +93,19 @@ export default function ChangePhoneScreen({
   ) => {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
       otpInputRefs[index - 1].current?.focus()
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      otpInputRefs[index - 1].current?.focus()
+    } else if (e.key === "ArrowRight" && index < 3) {
+      otpInputRefs[index + 1].current?.focus()
     }
   }
 
   const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault()
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 4)
+    const pasted = e.clipboardData
+      .getData("text")
+      .replace(/\D/g, "")
+      .slice(0, 4)
     if (pasted) {
       const newOtp = [...otp]
       for (let i = 0; i < 4; i++) {
@@ -156,18 +161,13 @@ export default function ChangePhoneScreen({
     >
       {/* Top Header Navigation */}
       <div className="pt-12 pb-3 px-5 border-b border-[var(--border)] bg-[var(--card)]/90 backdrop-blur-md flex items-center justify-between shrink-0 shadow-xs">
-        <button
-          type="button"
+        <BackButton
+          dir={dir}
           onClick={handleBack}
-          className="w-10 h-10 rounded-full border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] flex items-center justify-center text-[var(--foreground)] transition-transform active:scale-90 cursor-pointer shadow-xs"
-          title={lang === "ar" ? "رجوع" : "Back"}
-        >
-          {dir === "rtl" ? (
-            <IconArrowRight size={20} stroke={2.2} />
-          ) : (
-            <IconArrowLeft size={20} stroke={2.2} />
-          )}
-        </button>
+          className="w-10 h-10 border border-[var(--border)] bg-[var(--background)] hover:bg-[var(--secondary)] shadow-xs"
+          iconSize={20}
+          iconStroke={2.2}
+        />
 
         <h1 className="text-base sm:text-lg font-bold text-[var(--foreground)]">
           {step === "phone"
@@ -207,7 +207,10 @@ export default function ChangePhoneScreen({
             {/* Current Phone display */}
             <div className="w-full text-xs text-[var(--muted-foreground)] bg-[var(--card)] border border-[var(--border)] rounded-2xl p-3 flex items-center justify-between">
               <span>{lang === "ar" ? "الرقم الحالي:" : "Current number:"}</span>
-              <span dir="ltr" className="font-semibold text-[var(--foreground)]">
+              <span
+                dir="ltr"
+                className="font-semibold text-[var(--foreground)]"
+              >
                 {currentPhone}
               </span>
             </div>
@@ -275,6 +278,7 @@ export default function ChangePhoneScreen({
                   key={i}
                   ref={otpInputRefs[i]}
                   value={digit}
+                  dir="ltr"
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
                   onPaste={handleOtpPaste}
@@ -285,6 +289,7 @@ export default function ChangePhoneScreen({
                   } focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--primary)]`}
                   inputMode="numeric"
                   maxLength={1}
+                  autoComplete={i === 0 ? "one-time-code" : "off"}
                 />
               ))}
             </div>
@@ -292,15 +297,6 @@ export default function ChangePhoneScreen({
             {otpError && (
               <p className="text-xs text-red-500 font-medium">{otpError}</p>
             )}
-
-            {/* Demo Hint Banner */}
-            <Card className="p-3 border-dashed border-[var(--primary)]/40 bg-[var(--primary)]/10 rounded-2xl text-xs text-[var(--muted-foreground)] flex items-center justify-center gap-1.5">
-              <span>
-                {lang === "ar"
-                  ? "💡 رمز التحقق التجريبي هو: 1234"
-                  : "💡 Demo verification code is: 1234"}
-              </span>
-            </Card>
 
             {/* Resend Code Option */}
             <div className="text-xs text-[var(--muted-foreground)] flex items-center justify-center gap-1.5">
@@ -322,7 +318,9 @@ export default function ChangePhoneScreen({
                 >
                   <IconRotateClockwise size={14} />
                   <span>
-                    {lang === "ar" ? "إعادة إرسال الرمز الآن" : "Resend code now"}
+                    {lang === "ar"
+                      ? "إعادة إرسال الرمز الآن"
+                      : "Resend code now"}
                   </span>
                 </button>
               )}
@@ -358,7 +356,9 @@ export default function ChangePhoneScreen({
                 <span className="flex items-center justify-center gap-2">
                   <IconCheck size={20} stroke={3} />
                   <span>
-                    {lang === "ar" ? "تم التحقق وتحديث الرقم!" : "Verified & Updated!"}
+                    {lang === "ar"
+                      ? "تم التحقق وتحديث الرقم!"
+                      : "Verified & Updated!"}
                   </span>
                 </span>
               ) : lang === "ar" ? (

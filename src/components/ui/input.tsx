@@ -14,7 +14,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <div
           dir={dir}
           className={cn(
-            "flex items-center w-full rounded-2xl border border-[var(--border)] bg-[var(--input)] px-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-transparent",
+            "flex items-center gap-2.5 w-full rounded-2xl border border-[var(--border)] bg-[var(--input)] px-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--ring)] focus-within:border-transparent",
             disabled && "opacity-50 cursor-not-allowed",
             className,
           )}

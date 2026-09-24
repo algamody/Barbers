@@ -1,20 +1,15 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { MapContainer, TileLayer, Marker, useMap } from "react-leaflet"
 import L from "leaflet"
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png"
 import markerIcon from "leaflet/dist/images/marker-icon.png"
 import markerShadow from "leaflet/dist/images/marker-shadow.png"
-import { SHOPS, isCommunityStatusActive, formatTimeHM } from "../data"
+import { SHOPS } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Card, Badge } from "@/components/ui"
-import {
-  IconStarFilled,
-  IconCheck,
-  IconMapPin,
-  IconClock,
-  IconSparkles,
-} from "@tabler/icons-react"
+import { Badge, ShopCard } from "@/components/ui"
+import { CommunityUpdateBottomSheet } from "@/components/bottom-sheets"
+import { IconMapPin, IconUsers } from "@tabler/icons-react"
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)
   ._getIconUrl
@@ -65,18 +60,68 @@ function FitBounds() {
   return null
 }
 
+function MapController({
+  selectedCoords,
+  recenterTrigger,
+  onMapClick,
+}: {
+  selectedCoords: [number, number] | null
+  recenterTrigger: number
+  onMapClick: () => void
+}) {
+  const map = useMap()
+  const onMapClickRef = useRef(onMapClick)
+  onMapClickRef.current = onMapClick
+
+  useEffect(() => {
+    if (!selectedCoords) return
+    map.panTo(selectedCoords, {
+      animate: true,
+      duration: 0.8,
+      easeLinearity: 0.25,
+    })
+  }, [selectedCoords, recenterTrigger, map])
+
+  useEffect(() => {
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      const target = e.originalEvent?.target as HTMLElement | null
+      if (target && target.closest(".leaflet-marker-icon")) return
+      onMapClickRef.current()
+    }
+    map.on("click", handleMapClick)
+    return () => {
+      map.off("click", handleMapClick)
+    }
+  }, [map])
+
+  return null
+}
+
 interface Props {
   theme: Theme
   lang: Lang
   onShopSelect: (id: string) => void
+  onOpenCommunity?: (id: string) => void
 }
 
-export default function MapScreen({ theme, lang, onShopSelect }: Props) {
+export default function MapScreen({
+  theme,
+  lang,
+  onShopSelect,
+  onOpenCommunity,
+}: Props) {
   const C = getC(theme)
   const T = useT(lang)
   const dir = lang === "ar" ? "rtl" : "ltr"
   const [selected, setSelected] = useState<string | null>(null)
+  const [recenterTrigger, setRecenterTrigger] = useState(0)
+  const [showCommunitySheet, setShowCommunitySheet] = useState(false)
   const selectedShop = SHOPS.find((s) => s.id === selected)
+
+  const handleSelectShop = (shopId: string) => {
+    setSelected(shopId)
+    setRecenterTrigger((prev) => prev + 1)
+  }
 
   const tileUrl =
     theme === "dark"
@@ -114,17 +159,28 @@ export default function MapScreen({ theme, lang, onShopSelect }: Props) {
         >
           <TileLayer url={tileUrl} />
           <FitBounds />
+          <MapController
+            selectedCoords={selected && COORDS[selected] ? COORDS[selected] : null}
+            recenterTrigger={recenterTrigger}
+            onMapClick={() => setSelected(null)}
+          />
           {SHOPS.map((shop) => {
             const coords = COORDS[shop.id]
             if (!coords) return null
+            const isSelected = selected === shop.id
             return (
               <Marker
                 key={shop.id}
                 position={coords}
-                icon={createShopIcon(shop.isOpen, selected === shop.id, C.gold)}
+                zIndexOffset={isSelected ? 1000 : 0}
+                icon={createShopIcon(shop.isOpen, isSelected, C.gold)}
                 eventHandlers={{
-                  click: () =>
-                    setSelected(selected === shop.id ? null : shop.id),
+                  click: (e) => {
+                    if (e.originalEvent) {
+                      e.originalEvent.stopPropagation()
+                    }
+                    handleSelectShop(shop.id)
+                  },
                 }}
               />
             )
@@ -150,7 +206,7 @@ export default function MapScreen({ theme, lang, onShopSelect }: Props) {
         </div>
       </div>
 
-      {/* Selected Shop popup card using unified Card & Button */}
+      {/* Selected Shop popup card - Clickable to open shop details */}
       <div
         className="absolute bottom-0 left-0 right-0 z-[999] transition-all duration-300"
         style={{
@@ -159,119 +215,45 @@ export default function MapScreen({ theme, lang, onShopSelect }: Props) {
         }}
       >
         {selectedShop && (
-          <Card className="rounded-2xl overflow-hidden p-0 border-[var(--border)] bg-[var(--card)] shadow-xl">
-            <div className="relative h-28 overflow-hidden bg-[var(--card-alt)]">
-              <img
-                src={selectedShop.photo}
-                alt={selectedShop.name}
-                className="w-full h-full object-cover"
-              />
-              <div
-                className="absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 60%)",
+          <ShopCard
+            shop={selectedShop}
+            onClick={() => onShopSelect(selectedShop.id)}
+            lang={lang}
+            dir={dir}
+            action={
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (onOpenCommunity) {
+                    onOpenCommunity(selectedShop.id)
+                  } else {
+                    setShowCommunitySheet(true)
+                  }
                 }}
-              />
-              {/* Community update badge with time */}
-              {isCommunityStatusActive(selectedShop) && (
-                <div className="absolute top-2.5 left-2.5 z-10">
-                  <Badge
-                    variant="subtle"
-                    size="xs"
-                    className="bg-black/70 backdrop-blur-md text-[10px] text-zinc-200 border-amber-500/30 gap-1 font-medium"
-                  >
-                    {T.communityUpdateWithTime(
-                      formatTimeHM(
-                        selectedShop.communityUpdate?.updatedAt,
-                        lang,
-                      ),
-                    )}
-                  </Badge>
-                </div>
-              )}
-              <div
-                className="absolute bottom-3 right-4 left-4 flex items-end justify-between text-white"
-                dir={dir}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 active:scale-95 transition-all text-xs font-semibold cursor-pointer border border-[var(--primary)]/20 shadow-2xs"
+                title={lang === "ar" ? "تحديث المجتمع" : "Community Update"}
               >
-                <div className="flex items-center gap-1.5">
-                  <IconStarFilled size={13} className="text-[var(--primary)]" />
-                  <span className="text-xs text-[var(--primary)] font-bold">
-                    {selectedShop.rating}
-                  </span>
-                  <span className="text-xs text-white/70">
-                    ({selectedShop.reviewCount})
-                  </span>
-                </div>
-                <div>
-                  <p
-                    className="text-base font-light flex items-center"
-                    style={{ fontFamily: "var(--font-display)" }}
-                  >
-                    {lang === "ar" ? selectedShop.nameAr : selectedShop.name}
-                    {selectedShop.isVerified && (
-                      <IconCheck
-                        size={14}
-                        stroke={3}
-                        className="mr-1 text-[var(--primary)]"
-                      />
-                    )}
-                  </p>
-                  <p className="text-xs text-white/70">
-                    {selectedShop.distance}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div
-              className="px-4 py-3 flex items-center justify-between"
-              dir={dir}
-            >
-              <Button
-                size="sm"
-                onClick={() => onShopSelect(selectedShop.id)}
-                className="rounded-xl px-5 font-semibold"
-              >
-                {T.viewShop}
-              </Button>
-              <div className="flex items-center gap-2" dir={dir}>
-                <div style={{ textAlign: dir === "rtl" ? "right" : "left" }}>
-                  <p
-                    className={`text-xs font-semibold ${
-                      selectedShop.isOpen
-                        ? "text-emerald-500"
-                        : "text-[var(--muted-foreground)]"
-                    }`}
-                  >
-                    {selectedShop.isOpen
-                      ? `${selectedShop.waitingCount} ${T.waiting}`
-                      : T.closedNow}
-                  </p>
-                  <p className="text-[11px] text-[var(--foreground)] font-medium flex items-center gap-1">
-                    <IconClock
-                      size={12}
-                      className="text-[var(--primary)] shrink-0"
-                    />
-                    <span>
-                      {selectedShop.workingHours
-                        ? selectedShop.workingHours[lang]
-                        : "10:00ص - 12:00م"}
-                    </span>
-                  </p>
-                  <p className="text-[10px] text-[var(--muted-foreground)]">
-                    {selectedShop.address}
-                  </p>
-                </div>
-                <div
-                  className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                    selectedShop.isOpen ? "bg-emerald-500" : "bg-zinc-500"
-                  }`}
-                />
-              </div>
-            </div>
-          </Card>
+                <IconUsers size={12} stroke={2.2} />
+                <span>{lang === "ar" ? "تحديث المجتمع" : "Community"}</span>
+              </button>
+            }
+          />
         )}
       </div>
+
+      {/* Community Update Modal Fallback */}
+      {showCommunitySheet && selectedShop && (
+        <CommunityUpdateBottomSheet
+          open={showCommunitySheet}
+          onClose={() => setShowCommunitySheet(false)}
+          lang={lang}
+          shopName={lang === "ar" ? selectedShop.nameAr : selectedShop.name}
+          onSubmitSuccess={() => {
+            setShowCommunitySheet(false)
+          }}
+        />
+      )}
 
       {!selected && (
         <div className="absolute bottom-4 left-0 right-0 flex justify-center z-[999]">

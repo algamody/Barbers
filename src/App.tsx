@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Theme, getC } from "./theme"
 import { Lang, useT } from "./i18n"
 import {
@@ -7,7 +7,6 @@ import {
   IconUser,
   IconWifi,
   IconBattery3,
-  IconCircleCheck,
   IconCalendarEvent,
   IconWallet,
 } from "@tabler/icons-react"
@@ -22,35 +21,94 @@ import Favorites from "./screens/Favorites"
 import BookingsScreen from "./screens/BookingsScreen"
 import WalletScreen from "./screens/WalletScreen"
 import PointsScreen from "./screens/PointsScreen"
-import ExportPage from "./export/ExportPage"
 import CommunityUpdates from "./components/CommunityUpdates"
+import { Snackbar, GlobalSnackbarHost } from "./components/ui"
 import { SHOPS } from "./data"
+import { PersonBooking, GroupBookingData } from "./types/booking"
 
-type Screen =
-  | { name: "home" }
-  | { name: "shop"; shopId: string }
-  | {
-      name: "book"
-      shopId: string
-      serviceId: string
-    }
-  | { name: "profile" }
-  | { name: "favorites" }
-  | { name: "points" }
-  | { name: "community"; shopId: string }
+type Screen = { name: "home" } | {
+  name: "shop"
+  shopId: string
+  addingPersonName?: string
+  initialTab?: string
+  reopenClaimedSlot?: {
+    staffId?: string
+    fee?: number
+    serviceId?: string
+    addonIds?: string[]
+  } | null
+} | {
+  name: "book"
+  shopId: string
+  serviceId?: string
+  addonIds?: string[]
+  addingPersonName?: string
+  initialStep?: "barber" | "group_list" | "confirm"
+  isClaimedSlot?: boolean
+  claimedStaffId?: string
+  depositPaid?: number
+} | { name: "profile" } | { name: "favorites" } | { name: "points" } | {
+  name: "community"
+  shopId: string
+}
 
 type Tab = "home" | "bookings" | "map" | "wallet" | "profile"
 
 export default function App() {
-  const [exportMode, setExportMode] = useState(false)
-  const [theme, setTheme] = useState<Theme>("light")
-  const [lang, setLang] = useState<Lang>("ar")
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const saved = localStorage.getItem("app_theme")
+      if (saved === "dark" || saved === "light") return saved
+    } catch {}
+    return "light"
+  })
+  const [lang, setLang] = useState<Lang>(() => {
+    try {
+      const saved = localStorage.getItem("app_lang")
+      if (saved === "ar" || saved === "en") return saved
+    } catch {}
+    return "ar"
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("app_theme", theme)
+    } catch {}
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.toggle("dark", theme === "dark")
+      document.documentElement.setAttribute("data-theme", theme)
+    }
+  }, [theme])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("app_lang", lang)
+    } catch {}
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("lang", lang)
+      document.documentElement.setAttribute(
+        "dir",
+        lang === "ar" ? "rtl" : "ltr",
+      )
+    }
+  }, [lang])
+
   const [authed, setAuthed] = useState(false)
   const [screen, setScreen] = useState<Screen>({ name: "home" })
+  const [groupBookingPersons, setGroupBookingPersons] =
+    useState<PersonBooking[]>([])
   const [activeTab, setActiveTab] = useState<Tab>("home")
   const [userPoints, setUserPoints] = useState<number>(175)
   const [booked, setBooked] = useState(false)
+  const [showBookingToast, setShowBookingToast] = useState(false)
   const [showQueue, setShowQueue] = useState(false)
+  const [selectedQueueStaffId, setSelectedQueueStaffId] =
+    useState<string | null>(() => {
+      try {
+        return localStorage.getItem("selected_queue_staff_id")
+      } catch {}
+      return null
+    })
   const [favorites, setFavorites] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem("barber_favorites")
@@ -105,6 +163,7 @@ export default function App() {
   const handleLogout = () => {
     setAuthed(false)
     setBooked(false)
+    setShowBookingToast(false)
     setShowQueue(false)
     setScreen({ name: "home" })
     setActiveTab("home")
@@ -119,7 +178,14 @@ export default function App() {
         <MyQueue
           theme={theme}
           lang={lang}
-          onClose={() => setShowQueue(false)}
+          selectedStaffId={selectedQueueStaffId}
+          onClose={() => {
+            setShowQueue(false)
+            setSelectedQueueStaffId(null)
+            try {
+              localStorage.removeItem("selected_queue_staff_id")
+            } catch {}
+          }}
         />
       )
 
@@ -141,7 +207,15 @@ export default function App() {
           theme={theme}
           lang={lang}
           hasActiveBooking={booked}
-          onViewQueue={() => setShowQueue(true)}
+          onViewQueue={(staffId) => {
+            if (staffId) {
+              setSelectedQueueStaffId(staffId)
+              try {
+                localStorage.setItem("selected_queue_staff_id", staffId)
+              } catch {}
+            }
+            setShowQueue(true)
+          }}
           onShopSelect={(id) => setScreen({ name: "shop", shopId: id })}
           onBookNew={() => {
             setActiveTab("home")
@@ -149,6 +223,7 @@ export default function App() {
           }}
           onActivateBooking={() => {
             setBooked(true)
+            setShowBookingToast(true)
           }}
         />
       )
@@ -161,6 +236,9 @@ export default function App() {
           onShopSelect={(id) => {
             setScreen({ name: "shop", shopId: id })
             setActiveTab("home")
+          }}
+          onOpenCommunity={(id) => {
+            setScreen({ name: "community", shopId: id })
           }}
         />
       )
@@ -176,8 +254,26 @@ export default function App() {
           onToggleTheme={toggleTheme}
           onShopSelect={(id) => setScreen({ name: "shop", shopId: id })}
           hasActiveBooking={booked}
-          bookingPosition={2}
-          bookingShop="Royal Cut"
+          bookingPosition={(() => {
+            try {
+              const saved = localStorage.getItem("active_group_booking")
+              if (saved) {
+                const parsed = JSON.parse(saved)
+                return parsed.position || (parsed.isClaimedSlot ? 1 : 2)
+              }
+            } catch {}
+            return 2
+          })()}
+          bookingShop={(() => {
+            try {
+              const saved = localStorage.getItem("active_group_booking")
+              if (saved) {
+                const parsed = JSON.parse(saved)
+                return parsed.shopName || "Royal Cut"
+              }
+            } catch {}
+            return "Royal Cut"
+          })()}
           onViewQueue={() => setShowQueue(true)}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
@@ -191,15 +287,45 @@ export default function App() {
           theme={theme}
           lang={lang}
           shopId={screen.shopId}
-          onBack={() => setScreen({ name: "home" })}
-          onBook={(shopId, serviceId) =>
-            setScreen({ name: "book", shopId, serviceId })
+          addingPersonName={screen.addingPersonName}
+          onBackToGroup={() =>
+            setScreen({
+              name: "book",
+              shopId: screen.shopId,
+              initialStep: "group_list",
+            })
+          }
+          initialTab={screen.initialTab}
+          reopenClaimedSlot={screen.reopenClaimedSlot}
+          onBack={() => {
+            setGroupBookingPersons([])
+            setScreen({ name: "home" })
+          }}
+          onBook={(shopId, serviceId, addonIds) =>
+            setScreen({
+              name: "book",
+              shopId,
+              serviceId,
+              addonIds,
+              addingPersonName: screen.addingPersonName,
+              initialStep: "barber",
+            })
+          }
+          onClaimSlot={(shopId, staffId, fee, serviceId, addonIds) =>
+            setScreen({
+              name: "book",
+              shopId,
+              isClaimedSlot: true,
+              claimedStaffId: staffId,
+              depositPaid: fee,
+              serviceId,
+              addonIds,
+              initialStep: "confirm",
+            })
           }
           isFavorite={favorites.includes(screen.shopId)}
           onToggleFavorite={() => toggleFavorite(screen.shopId)}
-          onOpenCommunity={(shopId) =>
-            setScreen({ name: "community", shopId })
-          }
+          onOpenCommunity={(shopId) => setScreen({ name: "community", shopId })}
         />
       )
 
@@ -213,7 +339,13 @@ export default function App() {
           shopName={shop.name}
           shopNameAr={shop.nameAr}
           isVerified={shop.isVerified}
-          onBack={() => setScreen({ name: "shop", shopId: screen.shopId })}
+          onBack={() => {
+            if (activeTab === "map") {
+              setScreen({ name: "home" })
+            } else {
+              setScreen({ name: "shop", shopId: screen.shopId })
+            }
+          }}
         />
       )
     }
@@ -225,12 +357,62 @@ export default function App() {
           lang={lang}
           shopId={screen.shopId}
           serviceId={screen.serviceId}
-          onBack={() => setScreen({ name: "shop", shopId: screen.shopId })}
-          onConfirm={() => {
+          addonIds={screen.addonIds}
+          addingPersonName={screen.addingPersonName}
+          initialPersons={groupBookingPersons}
+          initialStep={screen.initialStep}
+          isClaimedSlot={screen.isClaimedSlot}
+          claimedStaffId={screen.claimedStaffId}
+          depositPaid={screen.depositPaid}
+          onUpdatePersons={(updated) => setGroupBookingPersons(updated)}
+          onAddPersonRequest={(name, currentPersons) => {
+            setGroupBookingPersons(currentPersons)
+            setScreen({
+              name: "shop",
+              shopId: screen.shopId,
+              addingPersonName: name,
+            })
+          }}
+          onBackToShopDetailForPerson={() => {
+            setScreen({
+              name: "shop",
+              shopId: screen.shopId,
+              addingPersonName: screen.addingPersonName,
+            })
+          }}
+          onBack={(retServiceId, retAddonIds) => {
+            if (screen.isClaimedSlot) {
+              setScreen({
+                name: "shop",
+                shopId: screen.shopId,
+                initialTab: "staff",
+                reopenClaimedSlot: {
+                  staffId: screen.claimedStaffId,
+                  fee: screen.depositPaid,
+                  serviceId: retServiceId || screen.serviceId,
+                  addonIds: retAddonIds || screen.addonIds,
+                },
+              })
+            } else {
+              setGroupBookingPersons([])
+              setScreen({ name: "shop", shopId: screen.shopId })
+            }
+          }}
+          onConfirm={(groupData) => {
+            if (groupData) {
+              try {
+                localStorage.setItem(
+                  "active_group_booking",
+                  JSON.stringify(groupData),
+                )
+              } catch {}
+            }
             setBooked(true)
+            setShowBookingToast(true)
+            setGroupBookingPersons([])
             setScreen({ name: "home" })
             setActiveTab("home")
-            setShowQueue(true)
+            setShowQueue(false)
           }}
         />
       )
@@ -244,7 +426,6 @@ export default function App() {
           onToggleTheme={toggleTheme}
           onSelectLang={setLanguage}
           onLogout={handleLogout}
-          onExport={() => setExportMode(true)}
           onViewBookings={() => handleTabChange("bookings")}
           onViewWallet={() => handleTabChange("wallet")}
           onViewPoints={() => setScreen({ name: "points" })}
@@ -263,11 +444,16 @@ export default function App() {
       )
   }
 
-  const showNav = authed && !showQueue && screen.name !== "book"
+  // Only show bottom navigation on the 5 main tabs
+  const isMainTab =
+    (screen.name === "home" &&
+      (activeTab === "home" ||
+        activeTab === "bookings" ||
+        activeTab === "map" ||
+        activeTab === "wallet")) ||
+    (screen.name === "profile" && activeTab === "profile")
 
-  if (exportMode) {
-    return <ExportPage onBack={() => setExportMode(false)} />
-  }
+  const showNav = authed && !showQueue && isMainTab
 
   return (
     <div
@@ -282,6 +468,8 @@ export default function App() {
     >
       {/* Phone frame */}
       <div
+        id="phone-frame"
+        data-phone-frame="true"
         data-theme={theme}
         className={`relative flex flex-col overflow-hidden ${
           theme === "dark" ? "dark" : ""
@@ -336,48 +524,13 @@ export default function App() {
           >
             {renderScreen()}
           </div>
-
-          {/* Booking toast (only on home, non-queue view) */}
-          {booked &&
-            !showQueue &&
-            screen.name === "home" &&
-            activeTab === "home" && (
-              <div
-                className="absolute top-28 left-4 right-4 px-4 py-3 rounded-2xl flex items-center gap-3 z-50 shadow-lg"
-                style={{
-                  backgroundColor: C.greenBg,
-                  border: `1px solid ${C.green}40`,
-                  animation: "slideDown 0.3s ease",
-                }}
-                dir={dir}
-              >
-                <IconCircleCheck
-                  size={24}
-                  stroke={2}
-                  style={{ color: C.green }}
-                  className="flex-shrink-0"
-                />
-                <div>
-                  <p
-                    className="text-sm font-semibold"
-                    style={{ color: C.green }}
-                  >
-                    {lang === "ar" ? "تم الحجز بنجاح!" : "Booking confirmed!"}
-                  </p>
-                  <p className="text-xs" style={{ color: C.muted }}>
-                    {lang === "ar"
-                      ? "اضغط على البانر أعلاه لمتابعة دورك"
-                      : "Tap the banner above to track your queue"}
-                  </p>
-                </div>
-              </div>
-            )}
         </div>
 
         {/* Bottom navigation */}
         {showNav && (
           <div
             key={`nav-${lang}`}
+            data-bottom-nav="true"
             className={`flex-shrink-0 flex items-center px-2 pb-8 pt-3 ${
               lang === "ar" ? "motion-lang-ar" : "motion-lang-en"
             }`}
@@ -434,14 +587,28 @@ export default function App() {
             })}
           </div>
         )}
-      </div>
 
-      <style>{`
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-8px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-      `}</style>
+        {/* Global Floating Snackbar Host (persists across all screen transitions) */}
+        <GlobalSnackbarHost dir={dir} theme={theme} />
+
+        {/* Reusable Bottom Floating Snackbar */}
+        <Snackbar
+          open={showBookingToast}
+          onClose={() => setShowBookingToast(false)}
+          type="success"
+          dir={dir}
+          theme={theme}
+          title={lang === "ar" ? "تم الحجز بنجاح!" : "Booking confirmed!"}
+          description={
+            lang === "ar"
+              ? "اضغط على البانر لمتابعة دورك"
+              : "Tap the banner to track your queue"
+          }
+          onClick={() => {
+            setShowQueue(true)
+          }}
+        />
+      </div>
     </div>
   )
 }
