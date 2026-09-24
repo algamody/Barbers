@@ -298,17 +298,16 @@ export default function App() {
           initialTab={screen.initialTab}
           reopenClaimedSlot={screen.reopenClaimedSlot}
           onBack={() => {
-            setGroupBookingPersons([])
             setScreen({ name: "home" })
           }}
-          onBook={(shopId, serviceId, addonIds) =>
+          onBook={(shopId, serviceId, addonIds, resumeStep) =>
             setScreen({
               name: "book",
               shopId,
               serviceId,
               addonIds,
               addingPersonName: screen.addingPersonName,
-              initialStep: "barber",
+              initialStep: resumeStep || "barber",
             })
           }
           onClaimSlot={(shopId, staffId, fee, serviceId, addonIds) =>
@@ -365,6 +364,13 @@ export default function App() {
           claimedStaffId={screen.claimedStaffId}
           depositPaid={screen.depositPaid}
           onUpdatePersons={(updated) => setGroupBookingPersons(updated)}
+          onClearAddingPersonName={() => {
+            setScreen((prev) =>
+              prev.name === "book"
+                ? { ...prev, addingPersonName: undefined }
+                : prev,
+            )
+          }}
           onAddPersonRequest={(name, currentPersons) => {
             setGroupBookingPersons(currentPersons)
             setScreen({
@@ -394,8 +400,11 @@ export default function App() {
                 },
               })
             } else {
-              setGroupBookingPersons([])
-              setScreen({ name: "shop", shopId: screen.shopId })
+              setScreen({
+                name: "shop",
+                shopId: screen.shopId,
+                addingPersonName: undefined,
+              })
             }
           }}
           onConfirm={(groupData) => {
@@ -405,11 +414,15 @@ export default function App() {
                   "active_group_booking",
                   JSON.stringify(groupData),
                 )
+                localStorage.removeItem(`draft_booking_${screen.shopId}`)
               } catch {}
             }
             setBooked(true)
             setShowBookingToast(true)
             setGroupBookingPersons([])
+            try {
+              localStorage.removeItem(`draft_booking_${screen.shopId}`)
+            } catch {}
             setScreen({ name: "home" })
             setActiveTab("home")
             setShowQueue(false)

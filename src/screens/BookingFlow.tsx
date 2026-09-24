@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useMemo } from "react"
 import { SHOPS, StaffMember } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { PersonBooking, GroupBookingData } from "../types/booking"
+import { PersonBooking, GroupBookingData, DraftBookingData } from "../types/booking"
 import {
   Button,
   Card,
@@ -65,6 +65,7 @@ interface Props {
   onUpdatePersons?: (persons: PersonBooking[]) => void
   onAddPersonRequest?: (name: string, currentPersons: PersonBooking[]) => void
   onBackToShopDetailForPerson?: () => void
+  onClearAddingPersonName?: () => void
 }
 
 export default function BookingFlow({
@@ -84,6 +85,7 @@ export default function BookingFlow({
   onUpdatePersons,
   onAddPersonRequest,
   onBackToShopDetailForPerson,
+  onClearAddingPersonName,
 }: Props) {
   const C = getC(theme)
   const T = useT(lang)
@@ -109,6 +111,24 @@ export default function BookingFlow({
     return lang === "ar" ? "محمد القمودي" : "Mohammed Algamody"
   })()
 
+  const [activeAddingPersonName, setActiveAddingPersonName] = useState<
+    string | null
+  >(addingPersonName || null)
+
+  useEffect(() => {
+    setActiveAddingPersonName(addingPersonName || null)
+  }, [addingPersonName])
+
+  // Load saved draft booking if available
+  const savedDraft = useMemo<DraftBookingData | null>(() => {
+    if (isClaimedSlot) return null
+    try {
+      const raw = localStorage.getItem(`draft_booking_${shopId}`)
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return null
+  }, [shopId, isClaimedSlot])
+
   // Persons in this group booking
   const [persons, setPersons] = useState<PersonBooking[]>(() => {
     if (isClaimedSlot) {
@@ -132,6 +152,26 @@ export default function BookingFlow({
                 p.name === "أنت" || p.name === "You"
                   ? currentUserName
                   : p.name || currentUserName,
+            }
+          : p,
+      )
+    }
+    if (
+      savedDraft?.persons &&
+      Array.isArray(savedDraft.persons) &&
+      savedDraft.persons.length > 0
+    ) {
+      return savedDraft.persons.map((p) =>
+        p.isMe
+          ? {
+              ...p,
+              name:
+                p.name === "أنت" || p.name === "You"
+                  ? currentUserName
+                  : p.name || currentUserName,
+              serviceId: serviceId || p.serviceId,
+              addonIds:
+                addonIds && addonIds.length > 0 ? addonIds : p.addonIds,
             }
           : p,
       )
@@ -173,15 +213,62 @@ export default function BookingFlow({
 
   const [selectedStaff, setSelectedStaff] = useState<string | null>(() => {
     if (addingPersonName) return null
+    if (savedDraft && typeof savedDraft.selectedStaff !== "undefined") {
+      return savedDraft.selectedStaff
+    }
     const me = persons.find((p) => p.isMe)
     return me ? me.staffId : null
   })
-  const [payment, setPayment] = useState<"wallet" | "cash" | null>(null)
+  const [payment, setPayment] = useState<"wallet" | "cash" | null>(() => {
+    if (
+      savedDraft?.payment &&
+      (savedDraft.payment === "wallet" || savedDraft.payment === "cash")
+    ) {
+      return savedDraft.payment
+    }
+    return null
+  })
   const [paymentAccordionOpen, setPaymentAccordionOpen] = useState(false)
   const [paymentError, setPaymentError] = useState(false)
-  const [step, setStep] = useState<"barber" | "group_list" | "confirm">(
-    initialStep || (addingPersonName ? "barber" : "barber"),
-  )
+  const [step, setStep] = useState<"barber" | "group_list" | "confirm">(() => {
+    if (initialStep) return initialStep
+    if (addingPersonName) return "barber"
+    if (
+      savedDraft?.step &&
+      ["barber", "group_list", "confirm"].includes(savedDraft.step)
+    ) {
+      return savedDraft.step
+    }
+    return "barber"
+  })
+
+  // Persist draft booking state to localStorage
+  useEffect(() => {
+    if (isClaimedSlot) return
+    try {
+      const draft: DraftBookingData = {
+        shopId,
+        serviceId: currentServiceId,
+        addonIds,
+        persons,
+        step,
+        selectedStaff,
+        payment,
+        updatedAt: Date.now(),
+      }
+      localStorage.setItem(`draft_booking_${shopId}`, JSON.stringify(draft))
+    } catch {}
+  }, [
+    shopId,
+    currentServiceId,
+    addonIds,
+    persons,
+    step,
+    selectedStaff,
+    payment,
+    isClaimedSlot,
+  ])
+
   const [showCashWarningAlert, setShowCashWarningAlert] = useState(false)
   const [showClosedAlert, setShowClosedAlert] = useState(false)
   const [showClaimedSlotConfirmAlert, setShowClaimedSlotConfirmAlert] =
@@ -449,11 +536,12 @@ export default function BookingFlow({
       return
     }
     if (step === "group_list") {
-      setStep("barber")
+      // In group list, pressing back exits the booking flow (رجوع وخروج)
+      onBack()
       return
     }
     if (step === "barber") {
-      if (addingPersonName && onBackToShopDetailForPerson) {
+      if (activeAddingPersonName && onBackToShopDetailForPerson) {
         onBackToShopDetailForPerson()
         return
       }
@@ -561,6 +649,7 @@ export default function BookingFlow({
         "active_group_booking",
         JSON.stringify(groupBookingData),
       )
+      localStorage.removeItem(`draft_booking_${shopId}`)
     } catch {}
 
     onConfirm(groupBookingData)
@@ -592,8 +681,8 @@ export default function BookingFlow({
             style={{ fontFamily: "var(--font-display)" }}
           >
             {step === "barber"
-              ? addingPersonName
-                ? T.chooseBarberFor(addingPersonName)
+              ? activeAddingPersonName
+                ? T.chooseBarberFor(activeAddingPersonName)
                 : T.chooseBarber
               : step === "group_list"
                 ? T.groupBooking
@@ -629,8 +718,8 @@ export default function BookingFlow({
         {step === "barber" && (
           <div dir={dir} className="space-y-3">
             <p className="text-xs tracking-widest uppercase mb-4 text-[var(--muted-foreground)]">
-              {addingPersonName
-                ? T.chooseBarberFor(addingPersonName)
+              {activeAddingPersonName
+                ? T.chooseBarberFor(activeAddingPersonName)
                 : T.chooseBarber}
               ?
             </p>
@@ -715,7 +804,7 @@ export default function BookingFlow({
                       style={{ textAlign: dir === "rtl" ? "right" : "left" }}
                     >
                       <p
-                        className={`text-sm font-semibold truncate ${
+                        className={`text-sm font-semibold leading-snug break-words ${
                           isInactive
                             ? "text-[var(--muted-foreground)]"
                             : "text-[var(--foreground)]"
@@ -889,7 +978,7 @@ export default function BookingFlow({
                           )}
 
                           <div className="text-start min-w-0">
-                            <p className="text-sm font-bold text-[var(--foreground)] truncate">
+                            <p className="text-sm font-bold text-[var(--foreground)] leading-snug break-words">
                               {!isAnyBarber && group.staff
                                 ? group.staff.name
                                 : T.anyBarber}
@@ -1905,10 +1994,10 @@ export default function BookingFlow({
             disabled={!selectedStaff}
             onClick={() => {
               if (!selectedStaff) return
-              if (addingPersonName) {
+              if (activeAddingPersonName) {
                 const newPerson: PersonBooking = {
                   id: `person_${Date.now()}`,
-                  name: addingPersonName,
+                  name: activeAddingPersonName,
                   isMe: false,
                   serviceId: currentServiceId,
                   addonIds: addonIds,
@@ -1917,6 +2006,8 @@ export default function BookingFlow({
                 const updated = [...persons, newPerson]
                 setPersons(updated)
                 if (onUpdatePersons) onUpdatePersons(updated)
+                setActiveAddingPersonName(null)
+                if (onClearAddingPersonName) onClearAddingPersonName()
                 setSelectedStaff(null)
                 setStep("group_list")
               } else {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { SHOPS, CommunityUpdateData, formatTimeHM, isToday } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
@@ -41,8 +41,13 @@ interface Props {
   shopId: string
   theme: Theme
   lang: Lang
-  onBack: () => void
-  onBook: (shopId: string, serviceId: string, addonIds?: string[]) => void
+  onBack?: () => void
+  onBook: (
+    shopId: string,
+    serviceId: string,
+    addonIds?: string[],
+    resumeStep?: "barber" | "group_list" | "confirm",
+  ) => void
   onClaimSlot?: (
     shopId: string,
     staffId: string,
@@ -86,8 +91,41 @@ export default function ShopDetail({
   const [tab, setTab] = useState<string>(
     initialTab || (reopenClaimedSlot?.staffId ? "staff" : "services"),
   )
-  const [selectedService, setSelectedService] = useState<string | null>(null)
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([])
+
+  const savedDraft = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(`draft_booking_${shopId}`)
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return null
+  }, [shopId])
+
+  const [selectedService, setSelectedService] = useState<string | null>(() => {
+    if (addingPersonName) return null
+    if (
+      savedDraft?.serviceId &&
+      shop.services.some((s) => s.id === savedDraft.serviceId)
+    ) {
+      return savedDraft.serviceId
+    }
+    return null
+  })
+  const [selectedAddons, setSelectedAddons] = useState<string[]>(() => {
+    if (addingPersonName) return []
+    if (savedDraft?.addonIds && Array.isArray(savedDraft.addonIds)) {
+      return savedDraft.addonIds
+    }
+    return []
+  })
+
+  const hasActiveDraft = Boolean(
+    !addingPersonName &&
+      savedDraft &&
+      ((savedDraft.persons && savedDraft.persons.length > 1) ||
+        savedDraft.step === "group_list" ||
+        savedDraft.step === "confirm" ||
+        savedDraft.selectedStaff),
+  )
 
   const [claimedSlotBooking, setClaimedSlotBooking] = useState<{
     staffId: string
@@ -387,12 +425,9 @@ export default function ShopDetail({
               <IconUsers size={18} stroke={2} />
               <NotificationDot
                 visible={showCommunityNotification}
-                pulse
-                color="primary"
+                color="rose"
                 size="sm"
                 placement="top-right"
-                className="-top-0.5 -right-0.5"
-                ringClassName="ring-2 ring-black"
               />
             </Button>
 
@@ -515,8 +550,7 @@ export default function ShopDetail({
             >
               <NotificationDot
                 visible={showStaffNotification}
-                pulse
-                color="primary"
+                color="rose"
                 size="xs"
                 placement="top-end"
                 className="-top-0.5 -end-1.5"
@@ -783,7 +817,7 @@ export default function ShopDetail({
                     <div className="flex-1 min-w-0 text-start">
                       <div className="flex items-center gap-2">
                         <p
-                          className={`text-sm font-semibold truncate ${
+                          className={`text-sm font-semibold leading-snug break-words ${
                             isInactive
                               ? "text-[var(--muted-foreground)]"
                               : "text-[var(--foreground)]"
@@ -953,12 +987,18 @@ export default function ShopDetail({
           fullWidth
           disabled={!selectedService}
           onClick={() =>
-            selectedService && onBook(shopId, selectedService, selectedAddons)
+            selectedService &&
+            onBook(
+              shopId,
+              selectedService,
+              selectedAddons,
+              hasActiveDraft ? savedDraft?.step || "group_list" : "barber",
+            )
           }
         >
           {selectedService ? (
             <span className="flex items-center justify-between w-full px-1">
-              <span>{T.bookNow}</span>
+              <span>{hasActiveDraft ? T.continueBooking : T.bookNow}</span>
               <span className="text-sm font-bold opacity-90">
                 {totalPrice} {lang === "ar" ? "د.ل" : "LYD"}
               </span>

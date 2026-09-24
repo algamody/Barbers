@@ -338,7 +338,9 @@ export default function MyQueue({
     ? effectivePersons[activeChairIdx] || currentPersons[0]
     : effectivePersons[0] || currentPersons[0]
 
-  const chairLabel = chairPerson?.isMe
+  const isGroupWithSameBarber = currentPersons.length > 1
+
+  const chairPersonName = chairPerson?.isMe
     ? lang === "ar"
       ? "أنت"
       : "You"
@@ -346,7 +348,29 @@ export default function MyQueue({
       ? currentUserName
       : chairPerson?.name || (lang === "ar" ? "أنت" : "You")
 
-  const queuePills = useMemo(() => {
+  const chairSlotLabel = useMemo(() => {
+    if (isGroupWithSameBarber) {
+      const pIdx = currentPersons.findIndex((p) => p.id === chairPerson?.id)
+      const num = pIdx >= 0 ? pIdx + 1 : 1
+      return `${num}`
+    }
+    return lang === "ar" ? "أنت" : "You"
+  }, [isGroupWithSameBarber, currentPersons, chairPerson, lang])
+
+  interface QueueSlot {
+    type: "group" | "other" | "empty"
+    label?: string
+  }
+
+  interface QueueData {
+    pills: QueueSlot[]
+    aheadOverflow: number
+    behindOverflow: number
+  }
+
+  const queueData = useMemo<QueueData>(() => {
+    const MAX_MARKS = 6
+
     // Persons from effectivePersons that are in the queue line (behind the chair)
     const groupInQueue = isMeInChair
       ? effectivePersons.slice(activeChairIdx + 1)
@@ -362,33 +386,99 @@ export default function MyQueue({
       aheadCount = 0
     }
 
-    const totalSlots = Math.max(5, aheadCount + groupInQueue.length + 2)
-    const slots: Array<{
-      type: "group" | "other" | "empty"
-      label?: string
-    }> = []
+    const realPeopleCount = aheadCount + groupInQueue.length
 
-    for (let i = 0; i < totalSlots; i++) {
-      if (i < aheadCount) {
-        slots.push({ type: "other" })
-      } else if (i < aheadCount + groupInQueue.length) {
-        const person = groupInQueue[i - aheadCount]
-        const label = person.isMe
-          ? lang === "ar"
-            ? "أنت"
-            : "You"
-          : person.name === "أنت" || person.name === "You"
-            ? currentUserName
-            : person.name
-        slots.push({ type: "group", label })
-      } else if (i === aheadCount + groupInQueue.length && i < totalSlots - 1) {
-        slots.push({ type: "other" })
+    // If total real people < MAX_MARKS, allow up to 2 dummy slots behind (1 other, 1 empty)
+    const dummyBehindCount =
+      realPeopleCount < MAX_MARKS
+        ? Math.min(2, MAX_MARKS - realPeopleCount)
+        : 0
+
+    const totalCount = realPeopleCount + dummyBehindCount
+
+    // Case 1: Total items <= MAX_MARKS -> everything fits without overflow
+    if (totalCount <= MAX_MARKS) {
+      const pills: QueueSlot[] = []
+      for (let i = 0; i < aheadCount; i++) {
+        pills.push({ type: "other" })
+      }
+      for (let i = 0; i < groupInQueue.length; i++) {
+        const person = groupInQueue[i]
+        let label: string
+        if (isGroupWithSameBarber) {
+          const pIdx = currentPersons.findIndex((p) => p.id === person.id)
+          const num = pIdx >= 0 ? pIdx + 1 : i + 1
+          label = `${num}`
+        } else {
+          label = lang === "ar" ? "أنت" : "You"
+        }
+        pills.push({ type: "group", label })
+      }
+      if (dummyBehindCount > 0) {
+        pills.push({ type: "other" })
+        if (dummyBehindCount > 1) {
+          pills.push({ type: "empty" })
+        }
+      }
+      return { pills, aheadOverflow: 0, behindOverflow: 0 }
+    }
+
+    // Case 2: Total items > MAX_MARKS -> strictly cap visible pills to MAX_MARKS (6)
+    let visibleAhead = 0
+    let aheadOverflow = 0
+
+    if (aheadCount > 0) {
+      if (aheadCount > 2 || groupInQueue.length >= MAX_MARKS - 1) {
+        visibleAhead = 1
+        aheadOverflow = aheadCount - 1
       } else {
-        slots.push({ type: "empty" })
+        visibleAhead = Math.min(aheadCount, MAX_MARKS - 1)
+        aheadOverflow = aheadCount - visibleAhead
       }
     }
 
-    return slots
+    const availableForGroup = MAX_MARKS - visibleAhead
+    const visibleGroupCount = Math.min(groupInQueue.length, availableForGroup)
+    const groupOverflow = groupInQueue.length - visibleGroupCount
+
+    const pills: QueueSlot[] = []
+
+    // 1. Visible ahead pills
+    for (let i = 0; i < visibleAhead; i++) {
+      pills.push({ type: "other" })
+    }
+
+    // 2. Visible group pills (up to available space)
+    for (let i = 0; i < visibleGroupCount; i++) {
+      const person = groupInQueue[i]
+      let label: string
+      if (isGroupWithSameBarber) {
+        const pIdx = currentPersons.findIndex((p) => p.id === person.id)
+        const num = pIdx >= 0 ? pIdx + 1 : i + 1
+        label = `${num}`
+      } else {
+        label = lang === "ar" ? "أنت" : "You"
+      }
+      pills.push({ type: "group", label })
+    }
+
+    // 3. Optional behind dummy slots only if group didn't overflow and space remains
+    let visibleDummyBehind = 0
+    if (groupOverflow === 0) {
+      const remainingSlots = MAX_MARKS - visibleAhead - visibleGroupCount
+      visibleDummyBehind = Math.min(dummyBehindCount, remainingSlots)
+      if (visibleDummyBehind > 0) {
+        pills.push({ type: "other" })
+        if (visibleDummyBehind > 1) {
+          pills.push({ type: "empty" })
+        }
+      }
+    }
+
+    const behindOverflow =
+      groupOverflow + (dummyBehindCount - visibleDummyBehind)
+
+    return { pills, aheadOverflow, behindOverflow }
   }, [
     isMeInChair,
     effectivePersons,
@@ -396,7 +486,8 @@ export default function MyQueue({
     status,
     booking.position,
     lang,
-    currentUserName,
+    isGroupWithSameBarber,
+    currentPersons,
   ])
 
   const headerPosition = useMemo(() => {
@@ -557,16 +648,20 @@ export default function MyQueue({
                     title={
                       lang === "ar"
                         ? isMeInChair
-                          ? `${chairLabel} على كرسي الحلاقة الآن`
+                          ? isGroupWithSameBarber
+                            ? `الشخص #${chairSlotLabel} (${chairPersonName}) على كرسي الحلاقة الآن`
+                            : "أنت على كرسي الحلاقة الآن"
                           : "على كرسي الحلاقة الآن"
                         : isMeInChair
-                          ? `${chairLabel} is in the barber chair`
+                          ? isGroupWithSameBarber
+                            ? `Person #${chairSlotLabel} (${chairPersonName}) is in the barber chair`
+                            : "You are in the barber chair"
                           : "Currently in the barber chair"
                     }
                   >
                     {isMeInChair && (
                       <span className="absolute top-0 text-[10px] font-bold text-[#2F6FA8] select-none leading-none whitespace-nowrap">
-                        {chairLabel}
+                        {chairSlotLabel}
                       </span>
                     )}
                     <div
@@ -599,7 +694,21 @@ export default function MyQueue({
                   {/* Progress pills for the queue with names strictly above slots */}
                   <div className="flex-1 flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 pt-3.5">
-                      {queuePills.map((slot, i) => {
+                      {queueData.aheadOverflow > 0 && (
+                        <span
+                          dir="ltr"
+                          className="shrink-0 text-xs font-bold text-[var(--muted-foreground)] select-none leading-none px-1"
+                          title={
+                            lang === "ar"
+                              ? `${queueData.aheadOverflow} أشخاص إضافيون في الأمام`
+                              : `${queueData.aheadOverflow} more ahead in queue`
+                          }
+                        >
+                          +{queueData.aheadOverflow}
+                        </span>
+                      )}
+
+                      {queueData.pills.map((slot, i) => {
                         const colorOther =
                           theme === "dark" ? "#5a5a5a" : "#b8b8b8"
                         const colorDashed =
@@ -611,7 +720,7 @@ export default function MyQueue({
                             className="flex-1 relative flex flex-col items-center"
                           >
                             {slot.label && (
-                              <span className="absolute -top-3.5 text-[10px] font-bold text-[#2F6FA8] select-none leading-none whitespace-nowrap">
+                              <span className="absolute -top-3.5 text-[10px] font-bold select-none leading-none whitespace-nowrap text-[#2F6FA8]">
                                 {slot.label}
                               </span>
                             )}
@@ -634,6 +743,20 @@ export default function MyQueue({
                           </div>
                         )
                       })}
+
+                      {queueData.behindOverflow > 0 && (
+                        <span
+                          dir="ltr"
+                          className="shrink-0 text-xs font-bold text-[var(--muted-foreground)] select-none leading-none px-1"
+                          title={
+                            lang === "ar"
+                              ? `${queueData.behindOverflow} خانات إضافية في الخلف`
+                              : `${queueData.behindOverflow} more behind in queue`
+                          }
+                        >
+                          +{queueData.behindOverflow}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -724,8 +847,8 @@ export default function MyQueue({
                       {chairPerson?.isMe
                         ? T.yourTurnWith(currentStaffName)
                         : lang === "ar"
-                          ? `دور ${chairLabel} الآن عند ${currentStaffName}`
-                          : `${chairLabel}'s turn with ${currentStaffName}`}
+                          ? `دور ${chairPersonName} الآن عند ${currentStaffName}`
+                          : `${chairPersonName}'s turn with ${currentStaffName}`}
                     </span>
                   </div>
                 </div>

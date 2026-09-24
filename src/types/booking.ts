@@ -38,3 +38,14 @@ export interface GroupBookingData {
   attendanceConfirmed?: boolean
   isClaimedSlot?: boolean
 }
+
+export interface DraftBookingData {
+  shopId: string
+  serviceId?: string
+  addonIds?: string[]
+  persons: PersonBooking[]
+  step: "barber" | "group_list" | "confirm"
+  selectedStaff: string | null
+  payment: "wallet" | "cash" | null
+  updatedAt: number
+}

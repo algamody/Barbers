@@ -356,11 +356,6 @@ export default function CommunityUpdates({
 
                     {/* Footer / helpful reaction */}
                     <div className="flex items-center justify-between pt-1 border-t border-[var(--border)]/40 text-xs">
-                      <span className="text-[11px] text-[var(--muted-foreground)]">
-                        {lang === "ar"
-                          ? "تقييم مفيد للزبائن"
-                          : "Helpful report"}
-                      </span>
                       <button
                         type="button"
                         onClick={() => handleLikeReport(report.id)}

@@ -2,7 +2,7 @@ import { useState } from "react"
 import { SHOPS } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Card, SearchBar, ShopCard } from "@/components/ui"
+import { Button, Card, SearchBar, ShopCard, NotificationDot } from "@/components/ui"
 import {
   IconBell,
   IconSun,
@@ -105,11 +105,10 @@ export default function Home({
                     : "text-[var(--foreground)]"
                 }
               />
-              {favorites.length > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-bold shadow-xs">
-                  {favorites.length}
-                </span>
-              )}
+              <NotificationDot
+                visible={favorites.length > 0}
+                count={favorites.length}
+              />
             </Button>
             <Button
               variant="outline"

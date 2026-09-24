@@ -449,7 +449,7 @@ export default function BookingsScreen({
                     </div>
                   </AccordionTrigger>
 
-                  <AccordionContent className="px-5 pb-5 pt-0 space-y-3">
+                  <AccordionContent className="px-3.5 sm:px-5 pb-5 pt-0 space-y-3">
                     <div className="border-t border-[var(--border)]/70 pt-3 space-y-2.5">
                       {barberGroups.map((bg, idx) => {
                         const barberPosition =
@@ -474,9 +474,9 @@ export default function BookingsScreen({
                                 handleViewBarberQueue(bg.staffId)
                               }
                             }}
-                            className="p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--secondary)]/30 hover:bg-[var(--secondary)]/40 active:scale-[0.99] transition-all flex items-center justify-between gap-3 shadow-2xs cursor-pointer"
+                            className="p-3 sm:p-3.5 rounded-2xl border border-[var(--border)] bg-[var(--secondary)]/30 hover:bg-[var(--secondary)]/40 active:scale-[0.99] transition-all flex items-center justify-between gap-2.5 sm:gap-3 shadow-2xs cursor-pointer"
                           >
-                            <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
                               {bg.staffMember?.photo ? (
                                 <img
                                   src={bg.staffMember.photo}
@@ -488,19 +488,11 @@ export default function BookingsScreen({
                                   <IconUser size={20} />
                                 </div>
                               )}
-                              <div className="min-w-0 text-start">
-                                <div className="flex items-center gap-1.5">
-                                  <h4 className="font-bold text-sm text-[var(--foreground)] truncate">
-                                    {bg.staffName}
-                                  </h4>
-                                  {bg.staffMember?.rating && (
-                                    <Rating
-                                      value={bg.staffMember.rating}
-                                      size={11}
-                                    />
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1.5 mt-1 mb-0.5">
+                              <div className="min-w-0 flex-1 text-start">
+                                <h4 className="font-bold text-sm text-[var(--foreground)] leading-snug break-words">
+                                  {bg.staffName}
+                                </h4>
+                                <div className="flex items-center gap-2 mt-1 mb-0.5 flex-wrap">
                                   <Badge
                                     variant="secondary"
                                     className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-[var(--secondary)] text-[var(--foreground)] border border-[var(--border)]/70"
@@ -509,6 +501,12 @@ export default function BookingsScreen({
                                       ? `العدد: ${bg.persons.length}`
                                       : `Count: ${bg.persons.length}`}
                                   </Badge>
+                                  {bg.staffMember?.rating && (
+                                    <Rating
+                                      value={bg.staffMember.rating}
+                                      size={11}
+                                    />
+                                  )}
                                 </div>
                                 <p className="text-[10px] text-[var(--primary)] font-medium mt-0.5">
                                   ~{bg.staffMember?.avgWait || 20}{" "}
@@ -518,14 +516,14 @@ export default function BookingsScreen({
                             </div>
 
                             {/* الترتيب الحالي ومؤشر الانتقال */}
-                            <div className="flex items-center gap-2 shrink-0">
-                              <div className="flex flex-col items-center justify-center px-2.5 py-1.5 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-2xs text-center min-w-[68px]">
-                                <span className="text-[10px] font-medium text-[var(--muted-foreground)] whitespace-nowrap leading-tight">
+                            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                              <div className="flex flex-col items-center justify-center px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-xl bg-[var(--card)] border border-[var(--border)] shadow-2xs text-center min-w-[58px] sm:min-w-[66px]">
+                                <span className="text-[9px] sm:text-[10px] font-medium text-[var(--muted-foreground)] whitespace-nowrap leading-tight">
                                   {lang === "ar"
                                     ? "الترتيب الحالي"
                                     : "Current Turn"}
                                 </span>
-                                <span className="text-base font-extrabold text-[var(--primary)] leading-tight mt-0.5">
+                                <span className="text-sm sm:text-base font-extrabold text-[var(--primary)] leading-tight mt-0.5">
                                   #{barberPosition}
                                 </span>
                               </div>
