@@ -105,7 +105,7 @@ export const SHOPS = [
     },
     communityUpdate: null as CommunityUpdateData | null,
     photo:
-      "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&h=400&fit=crop&auto=format",
+      "https://lh3.googleusercontent.com/gps-cs-s/AHRPTWnGEMeOWPllR5WkwkHrASDXPmbeAVi2SVVLKFGWygooJwtkye4e104jQP8sZzMdFkKot9OxJM50vju5EAMac2VRlcacI3yMWqZ7vcRRBivanAyYmRMmt8Y8-p1j0SJkNU8JodRTpg=s1360-w1360-h1020-rw",
     gallery: [
       "https://images.unsplash.com/photo-1605497788044-5a32c7078486?w=400&h=300&fit=crop&auto=format",
       "https://images.unsplash.com/photo-1599351431202-1e0f0137899a?w=400&h=300&fit=crop&auto=format",
@@ -235,7 +235,7 @@ export const SHOPS = [
       },
       {
         id: "sv5",
-        name: "استشارة تسريحة",
+        name: "استشوار",
         nameEn: "Style Consult",
         price: 5,
         duration: 15,
@@ -378,7 +378,7 @@ export const SHOPS = [
       ],
     },
     photo:
-      "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&h=400&fit=crop&auto=format",
+      "https://lh3.googleusercontent.com/gps-cs-s/AHRPTWkt6RKden1DmI4wF6DmD4Pdy8krFgVq0rm27TT9wciNL4S2xTPN1Kvm3ZCjYTQ1cldaojJqh1TDMO_QedpMkhHVDJEb--SP8fYJl87IywzF8_b_7gtgpD2tNEEVwpME32Tl435l=s1360-w1360-h1020-rw",
     gallery: [],
     services: [
       {
@@ -444,7 +444,7 @@ export const SHOPS = [
     },
     communityUpdate: null as CommunityUpdateData | null,
     photo:
-      "https://images.unsplash.com/photo-1622287162716-f311baa1a2b8?w=800&h=400&fit=crop&auto=format",
+      "https://lh3.googleusercontent.com/gps-cs-s/AHRPTWk_McHNFpobLwArPK940700lNwN8JB_vUkkU21gupzlRX7Y6lSBVDaNtFnpdIJWwn4G-ktboigVaN4bWWSiFVyjpn86K_T_F_iCfclPExxWFrOzCaqdFo4bLS9-N5AE0qoSSaPB=s1360-w1360-h1020-rw",
     gallery: [],
     services: [
       {
