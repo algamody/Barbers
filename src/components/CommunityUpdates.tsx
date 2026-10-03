@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react"
-import { Badge, Button, Card, StatusChip, BackButton } from "@/components/ui"
+import {
+  Badge,
+  Button,
+  Card,
+  StatusChip,
+  BackButton,
+  showSnackbar,
+} from "@/components/ui"
 import {
   IconX,
   IconClock,
   IconDoor,
   IconDoorExit,
   IconPlus,
-  IconThumbUp,
   IconUsers,
 } from "@tabler/icons-react"
 import { Lang, useT } from "../i18n"
@@ -15,8 +21,10 @@ import {
   CommunityUpdateData,
   CommunityReport,
   formatTimeHM,
+  notifyCommunitySync,
 } from "../data"
 import { CommunityUpdateBottomSheet } from "@/components/bottom-sheets"
+import CommunityUpdateCard, { VoteType } from "./CommunityUpdateCard"
 
 export interface CommunityUpdatesProps {
   shopId?: string
@@ -84,7 +92,34 @@ export default function CommunityUpdates({
   const [isBottomSheetOpen, setIsBottomSheetOpen] = useState(false)
   const [selectedPhotoPreview, setSelectedPhotoPreview] =
     useState<string | null>(null)
-  const [likedReports, setLikedReports] = useState<Record<string, boolean>>({})
+  const [userVotes, setUserVotes] = useState<Record<string, VoteType>>(() => {
+    if (shopId) {
+      try {
+        const saved = localStorage.getItem(`community_user_votes_${shopId}`)
+        if (saved) return JSON.parse(saved)
+      } catch {}
+    }
+    return {}
+  })
+
+  useEffect(() => {
+    if (!shopId) return
+    const handleSync = () => {
+      try {
+        const savedData = localStorage.getItem(`community_data_${shopId}`)
+        if (savedData) setData(JSON.parse(savedData))
+        const savedVotes = localStorage.getItem(`community_user_votes_${shopId}`)
+        if (savedVotes) setUserVotes(JSON.parse(savedVotes))
+      } catch {}
+    }
+    handleSync()
+    window.addEventListener("barbers_community_sync", handleSync)
+    window.addEventListener("storage", handleSync)
+    return () => {
+      window.removeEventListener("barbers_community_sync", handleSync)
+      window.removeEventListener("storage", handleSync)
+    }
+  }, [shopId])
 
   if (open !== undefined && !open) return null
 
@@ -107,11 +142,65 @@ export default function CommunityUpdates({
   const openPercentage = Math.round((data.openCount / totalVotes) * 100)
   const closedPercentage = 100 - openPercentage
 
-  const handleLikeReport = (id: string) => {
-    setLikedReports((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }))
+  const handleVote = (reportId: string, vote: VoteType) => {
+    // Once confirmed, the user cannot change their choice
+    if (userVotes[reportId]) {
+      return
+    }
+
+    const nextVotes = { ...userVotes, [reportId]: vote }
+    setUserVotes(nextVotes)
+    if (shopId) {
+      try {
+        localStorage.setItem(
+          `community_user_votes_${shopId}`,
+          JSON.stringify(nextVotes),
+        )
+      } catch {}
+    }
+
+    if (data && data.reports) {
+      const updatedReports = data.reports.map((rep) => {
+        if (rep.id !== reportId) return rep
+
+        let confirmed = rep.confirmedCount || 0
+        let unconfirmed = rep.unconfirmedCount || 0
+
+        if (vote === "correct") confirmed += 1
+        if (vote === "incorrect") unconfirmed += 1
+
+        return {
+          ...rep,
+          confirmedCount: confirmed,
+          unconfirmedCount: unconfirmed,
+        }
+      })
+
+      const updated: CommunityUpdateData = {
+        ...data,
+        reports: updatedReports,
+      }
+      setData(updated)
+      if (shopId) {
+        try {
+          localStorage.setItem(
+            `community_data_${shopId}`,
+            JSON.stringify(updated),
+          )
+        } catch {}
+      }
+      if (onUpdateCommunityData) {
+        onUpdateCommunityData(updated)
+      }
+      notifyCommunitySync(shopId)
+    } else {
+      notifyCommunitySync(shopId)
+    }
+
+    showSnackbar({
+      title: T.feedbackRecorded,
+      type: "success",
+    })
   }
 
   const handleNewUpdateSubmitted = (newInput: {
@@ -154,6 +243,7 @@ export default function CommunityUpdates({
     if (onUpdateCommunityData) {
       onUpdateCommunityData(updated)
     }
+    notifyCommunitySync(shopId)
   }
 
   return (
@@ -188,191 +278,76 @@ export default function CommunityUpdates({
 
       {/* Scrollable Page Body */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-10">
-        {/* Status & Timing Overview Card */}
-        <Card className="p-5 rounded-3xl border-[var(--border)] bg-[var(--card)] shadow-xs space-y-4">
-          {/* Big Count in Center & Smaller Last Update Time */}
-          <div className="text-center space-y-1">
-            <div className="text-4xl sm:text-5xl font-extrabold text-[var(--foreground)] tracking-tight">
-              {totalUpdates}
-            </div>
-            <div className="text-xs font-semibold text-[var(--muted-foreground)]">
-              {lang === "ar" ? "تحديث مجتمعي" : "Community updates"}
-            </div>
-
-            {/* Smaller Last Update Time Underneath */}
-            <div className="inline-flex items-center justify-center gap-1.5 text-xs text-[var(--muted-foreground)] pt-1">
-              <IconClock size={13} className="text-[var(--primary)] shrink-0" />
-              <span>
-                {lang === "ar" ? "آخر تحديث:" : "Last update:"}{" "}
-                <strong className="text-[var(--foreground)] font-semibold">
-                  {timeFormatted}
-                </strong>
-              </span>
-            </div>
-          </div>
-
-          {/* Underneath: Updates Bar (شريط التحديثات) */}
-          <div className="space-y-2 pt-3 border-t border-[var(--border)]/60">
-            <div className="flex items-center justify-between text-xs font-semibold">
-              <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                <IconDoor size={16} />
-                <span>
-                  {data.openCount} {T.openVotes}
-                </span>
-              </span>
-              <span className="text-red-500 dark:text-red-400 flex items-center gap-1.5">
-                <IconDoorExit size={16} />
-                <span>
-                  {data.closedCount} {T.closedVotes}
-                </span>
-              </span>
-            </div>
-
-            {/* Visual Split Progress Bar (شريط التحديثات) */}
-            <div className="h-2.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-700/80 overflow-hidden flex p-0.5 gap-0.5">
-              <div
-                style={{ width: `${openPercentage}%` }}
-                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                title={`${openPercentage}% ${T.openVotes}`}
-              />
-              <div
-                style={{ width: `${closedPercentage}%` }}
-                className="h-full bg-red-500 rounded-full transition-all duration-500"
-                title={`${closedPercentage}% ${T.closedVotes}`}
-              />
-            </div>
-          </div>
-        </Card>
-
-        {/* Action Button: Add Status Update (Opens Bottom Sheet) */}
-        <Button
-          variant="primary"
-          fullWidth
-          size="lg"
-          onClick={() => setIsBottomSheetOpen(true)}
-          className="bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 rounded-2xl font-bold py-3.5 shadow-md gap-2 cursor-pointer flex items-center justify-center text-sm active:scale-98 transition-transform"
-        >
-          <IconPlus size={20} stroke={2.5} />
-          <span>{T.addCommunityUpdate}</span>
-        </Button>
-
-        {/* Feed of updates displayed like reviews */}
-        <div className="space-y-3 pt-2">
+        {/* Feed of updates */}
+        <div className="space-y-4">
+          {/* Header Row: Title & Compact Add Button (مثل زر إضافة شخص في الحجز الجماعي) */}
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground)]">
-              {T.recentCommunityReports}
+            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--foreground)] flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-[var(--primary)] animate-pulse" />
+              <span>{T.latestCommunityUpdate}</span>
             </h3>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setIsBottomSheetOpen(true)}
+              className="h-8 px-3 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 text-[var(--primary)] hover:bg-[var(--primary)]/20 font-bold flex items-center gap-1.5 text-xs shadow-2xs cursor-pointer transition-all active:scale-95 shrink-0"
+            >
+              <IconPlus
+                size={15}
+                stroke={2.2}
+                className="text-[var(--primary)]"
+              />
+              <span>{T.addCommunityUpdate}</span>
+            </Button>
           </div>
 
           {data.reports && data.reports.length > 0 ? (
-            <div className="space-y-3">
-              {data.reports.map((report) => {
-                const repTimeFormatted = formatTimeHM(report.time, lang)
-                const isLiked = likedReports[report.id]
-                const currentLikes =
-                  (report.confirmedCount || 0) + (isLiked ? 1 : 0)
+            <>
+              {/* 1. Latest Community Update Card (بشكل واضح ومميز) */}
+              <CommunityUpdateCard
+                report={data.reports[0]}
+                lang={lang}
+                isLatest={true}
+                userVote={userVotes[data.reports[0].id]}
+                onVote={handleVote}
+                onImageClick={(url) => setSelectedPhotoPreview(url)}
+                showLatestBadge={false}
+                className="border-[var(--primary)]/40 shadow-xs"
+              />
 
-                return (
-                  <Card
-                    key={report.id}
-                    className="p-4 rounded-2xl border-[var(--border)] bg-[var(--card)] hover:border-[var(--border)]/80 transition-all space-y-3 shadow-2xs"
-                  >
-                    {/* User & Status Header (Review Style) */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {report.userAvatar ? (
-                          <img
-                            src={report.userAvatar}
-                            alt={report.userName}
-                            className="w-9 h-9 rounded-full object-cover border border-[var(--border)]"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-[var(--muted)] flex items-center justify-center text-xs font-bold text-[var(--foreground)] border border-[var(--border)]">
-                            {report.userName.slice(0, 1)}
-                          </div>
-                        )}
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-bold text-[var(--foreground)]">
-                              {report.userName}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-[var(--muted-foreground)] flex items-center gap-1">
-                            <IconClock size={11} />
-                            {repTimeFormatted}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Status Tag */}
-                      {report.isOpen ? (
-                        <div className="flex flex-col items-center shrink-0">
-                          <StatusChip isOpen={true} lang={lang} />
-                          {report.waitingCount !== undefined &&
-                            report.waitingCount !== null && (
-                              <span className="text-[11px] font-semibold text-[var(--muted-foreground)] mt-0.5">
-                                {lang === "ar"
-                                  ? `العدد: ${report.waitingCount}`
-                                  : `Count: ${report.waitingCount}`}
-                              </span>
-                            )}
-                        </div>
-                      ) : (
-                        <StatusChip
-                          isOpen={false}
-                          lang={lang}
-                          className="shrink-0"
-                        />
-                      )}
+              {/* 2. Separator + Older Updates (إن وجدت) */}
+              {data.reports.length > 1 && (
+                <div className="space-y-3 pt-1">
+                  {/* Clean Separator (سيبيريتور) */}
+                  <div className="relative py-2.5 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-[var(--border)]" />
                     </div>
-
-                    {/* Report Text Note (Review Content) */}
-                    {report.note && (
-                      <p className="text-xs sm:text-sm leading-relaxed text-[var(--foreground)]/90 bg-[var(--muted)]/20 p-3 rounded-2xl border border-[var(--border)]/40">
-                        {report.note}
-                      </p>
-                    )}
-
-                    {/* Attached Proof Photo */}
-                    {report.photo && (
-                      <div
-                        onClick={() =>
-                          setSelectedPhotoPreview(report.photo || null)
-                        }
-                        className="relative h-36 rounded-2xl overflow-hidden border border-[var(--border)] cursor-pointer group bg-black/30"
-                      >
-                        <img
-                          src={report.photo}
-                          alt="Proof"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                        <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                          <span className="bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                            {lang === "ar" ? "تكبير الصورة" : "Enlarge photo"}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Footer / helpful reaction */}
-                    <div className="flex items-center justify-between pt-1 border-t border-[var(--border)]/40 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => handleLikeReport(report.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                          isLiked
-                            ? "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary)]"
-                            : "border-[var(--border)] bg-[var(--muted)]/20 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                        }`}
-                      >
-                        <IconThumbUp size={14} stroke={isLiked ? 2.5 : 2} />
-                        <span>{currentLikes}</span>
-                      </button>
+                    <div className="relative px-3.5 py-0.5 rounded-full bg-[var(--card)] border border-[var(--border)] text-[11px] font-bold text-[var(--muted-foreground)] flex items-center gap-1.5 shadow-2xs">
+                      <IconClock size={12} className="text-[var(--primary)]" />
+                      <span>{T.previousCommunityUpdates}</span>
                     </div>
-                  </Card>
-                )
-              })}
-            </div>
+                  </div>
+
+                  {/* Older Cards Feed (صحيح + عدده، غير صحيح + عدده، بدون لست متأكد) */}
+                  <div className="space-y-3">
+                    {data.reports.slice(1).map((report) => (
+                      <CommunityUpdateCard
+                        key={report.id}
+                        report={report}
+                        lang={lang}
+                        isLatest={false}
+                        userVote={userVotes[report.id]}
+                        onVote={handleVote}
+                        onImageClick={(url) => setSelectedPhotoPreview(url)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="py-10 text-center text-xs text-[var(--muted-foreground)] bg-[var(--card)] rounded-2xl border border-[var(--border)]">
               {T.noCommunityUpdatesYet}

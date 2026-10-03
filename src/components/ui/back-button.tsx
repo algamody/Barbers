@@ -3,16 +3,17 @@ import { IconArrowLeft, IconArrowRight } from "@tabler/icons-react"
 import { Button, ButtonProps } from "./button"
 import { cn } from "@/lib/utils"
 
-export interface BackButtonProps extends Omit<ButtonProps, "children"> {
+export interface BackButtonProps
+  extends Omit<ButtonProps, "children"> {
   /** Optional direction override ("rtl" | "ltr"). If omitted, resolved from lang or DOM */
-  dir?: "rtl" | "ltr"
   /** Optional language ('ar' | 'en') to determine direction */
-  lang?: string
   /** Size of the arrow icon in pixels (default: 18) */
-  iconSize?: number
   /** Stroke width of the arrow icon (default: 2) */
-  iconStroke?: number
   /** Accessibility title / tooltip (default: "رجوع" in Arabic, "Back" in English) */
+  dir?: "rtl" | "ltr"
+  lang?: string
+  iconSize?: number
+  iconStroke?: number
   title?: string
 }
 

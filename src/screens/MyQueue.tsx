@@ -390,9 +390,7 @@ export default function MyQueue({
 
     // If total real people < MAX_MARKS, allow up to 2 dummy slots behind (1 other, 1 empty)
     const dummyBehindCount =
-      realPeopleCount < MAX_MARKS
-        ? Math.min(2, MAX_MARKS - realPeopleCount)
-        : 0
+      realPeopleCount < MAX_MARKS ? Math.min(2, MAX_MARKS - realPeopleCount) : 0
 
     const totalCount = realPeopleCount + dummyBehindCount
 

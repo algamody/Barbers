@@ -5,7 +5,7 @@ import { IconQrcode, IconCheck, IconScan } from "@tabler/icons-react"
 export interface QrScannerBottomSheetProps {
   open: boolean
   onClose: () => void
-  onScanSuccess: (data?: { shopName?: string; staffName?: string }) => void
+  onScanSuccess: (data?: { shopName?: string staffName?: string }) => void
   shopName?: string
   title?: string
   description?: string

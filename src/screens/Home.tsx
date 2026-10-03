@@ -2,7 +2,13 @@ import { useState } from "react"
 import { SHOPS } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Card, SearchBar, ShopCard, NotificationDot } from "@/components/ui"
+import {
+  Button,
+  Card,
+  SearchBar,
+  ShopCard,
+  NotificationDot,
+} from "@/components/ui"
 import {
   IconBell,
   IconSun,

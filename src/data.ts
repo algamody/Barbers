@@ -12,6 +12,7 @@ export interface CommunityReport {
   note?: string
   photo?: string
   confirmedCount?: number
+  unconfirmedCount?: number
 }
 
 export interface CommunityUpdateData {
@@ -78,13 +79,36 @@ export function formatTimeHM(
   }
 }
 
+export function getStoredCommunityData(shopId: string): CommunityUpdateData | null {
+  if (typeof window === "undefined") return null
+  try {
+    const saved = localStorage.getItem(`community_data_${shopId}`)
+    if (saved) return JSON.parse(saved)
+  } catch {}
+  return null
+}
+
+export function notifyCommunitySync(shopId?: string) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("barbers_community_sync", { detail: { shopId } }),
+    )
+  }
+}
+
 export function isCommunityStatusActive(shop: {
+  id?: string
   isVerified?: boolean
   communityUpdate?: { updatedAt?: string } | null
 }): boolean {
   if (shop.isVerified) return false
-  if (!shop.communityUpdate?.updatedAt) return false
-  return isToday(shop.communityUpdate.updatedAt)
+  let updatedAt = shop.communityUpdate?.updatedAt
+  if (shop.id && typeof window !== "undefined") {
+    const stored = getStoredCommunityData(shop.id)
+    if (stored?.updatedAt) updatedAt = stored.updatedAt
+  }
+  if (!updatedAt) return false
+  return isToday(updatedAt)
 }
 
 export const SHOPS = [
@@ -349,6 +373,7 @@ export const SHOPS = [
           photo:
             "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=600&h=400&fit=crop&auto=format",
           confirmedCount: 6,
+          unconfirmedCount: 1,
         },
         {
           id: "rep-2",
@@ -362,6 +387,7 @@ export const SHOPS = [
           photo:
             "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=600&h=400&fit=crop&auto=format",
           confirmedCount: 4,
+          unconfirmedCount: 0,
         },
         {
           id: "rep-3",
@@ -374,6 +400,7 @@ export const SHOPS = [
           note: "كان مقفل فترة الظهيرة لصلاة الظهر والغداء ثم عاد للعمل.",
           photo: "",
           confirmedCount: 1,
+          unconfirmedCount: 2,
         },
       ],
     },

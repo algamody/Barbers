@@ -452,15 +452,14 @@ export default function BookingsScreen({
                   <AccordionContent className="px-3.5 sm:px-5 pb-5 pt-0 space-y-3">
                     <div className="border-t border-[var(--border)]/70 pt-3 space-y-2.5">
                       {barberGroups.map((bg, idx) => {
-                        const barberPosition =
-                          activeGroupBooking?.isClaimedSlot
-                            ? 1
-                            : bg.staffMember?.queue != null &&
-                                bg.staffMember.queue > 0
-                              ? bg.staffMember.queue
-                              : activeGroupBooking?.position ||
-                                localActiveBooking?.position ||
-                                idx + 1
+                        const barberPosition = activeGroupBooking?.isClaimedSlot
+                          ? 1
+                          : bg.staffMember?.queue != null &&
+                              bg.staffMember.queue > 0
+                            ? bg.staffMember.queue
+                            : activeGroupBooking?.position ||
+                              localActiveBooking?.position ||
+                              idx + 1
 
                         return (
                           <div

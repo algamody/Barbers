@@ -88,7 +88,10 @@ export default function Favorites({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 pb-10 space-y-3" dir={dir}>
+      <div
+        className="flex-1 overflow-y-auto px-5 py-4 pb-10 space-y-3"
+        dir={dir}
+      >
         {filtered.length > 0 ? (
           filtered.map((shop) => (
             <ShopCard

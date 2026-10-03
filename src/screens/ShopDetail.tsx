@@ -1,5 +1,12 @@
 import { useState, useEffect, useMemo } from "react"
-import { SHOPS, CommunityUpdateData, formatTimeHM, isToday } from "../data"
+import {
+  SHOPS,
+  CommunityUpdateData,
+  CommunityReport,
+  formatTimeHM,
+  isToday,
+  notifyCommunitySync,
+} from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
 import {
@@ -17,7 +24,11 @@ import {
   StatusChip,
   BackButton,
 } from "@/components/ui"
-import { ServiceSelectionBottomSheet } from "@/components/bottom-sheets"
+import {
+  ServiceSelectionBottomSheet,
+  LatestCommunityUpdateBottomSheet,
+} from "@/components/bottom-sheets"
+import { VoteType } from "@/components/CommunityUpdateCard"
 import {
   IconClock,
   IconBolt,
@@ -185,14 +196,122 @@ export default function ShopDetail({
       return (shop as any).communityUpdate || null
     })
   const [isCommunityOpen, setIsCommunityOpen] = useState(false)
+  const [isLatestCommunitySheetOpen, setIsLatestCommunitySheetOpen] =
+    useState(false)
   const [isSimulatedYesterday, setIsSimulatedYesterday] = useState(false)
+
+  const [userVotes, setUserVotes] = useState<Record<string, VoteType>>(() => {
+    try {
+      const saved = localStorage.getItem(`community_user_votes_${shop.id}`)
+      if (saved) return JSON.parse(saved)
+    } catch {}
+    return {}
+  })
+
+  // Synchronize votes and community data live across pages
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const savedData = localStorage.getItem(`community_data_${shop.id}`)
+        if (savedData) setCommunityData(JSON.parse(savedData))
+        const savedVotes = localStorage.getItem(`community_user_votes_${shop.id}`)
+        if (savedVotes) setUserVotes(JSON.parse(savedVotes))
+      } catch {}
+    }
+
+    handleSync()
+
+    window.addEventListener("barbers_community_sync", handleSync)
+    window.addEventListener("storage", handleSync)
+    return () => {
+      window.removeEventListener("barbers_community_sync", handleSync)
+      window.removeEventListener("storage", handleSync)
+    }
+  }, [shop.id, isLatestCommunitySheetOpen, isCommunityOpen])
 
   const handleUpdateCommunityData = (updated: CommunityUpdateData) => {
     setCommunityData(updated)
     try {
       localStorage.setItem(`community_data_${shop.id}`, JSON.stringify(updated))
+      notifyCommunitySync(shop.id)
     } catch {}
   }
+
+  const handleVote = (reportId: string, vote: VoteType) => {
+    // Once confirmed, the user cannot change their choice
+    if (userVotes[reportId]) {
+      return
+    }
+
+    const nextVotes = { ...userVotes, [reportId]: vote }
+    setUserVotes(nextVotes)
+    try {
+      localStorage.setItem(
+        `community_user_votes_${shop.id}`,
+        JSON.stringify(nextVotes),
+      )
+    } catch {}
+
+    if (communityData && communityData.reports) {
+      const updatedReports = communityData.reports.map((rep) => {
+        if (rep.id !== reportId) return rep
+
+        let confirmed = rep.confirmedCount || 0
+        let unconfirmed = rep.unconfirmedCount || 0
+
+        if (vote === "correct") confirmed += 1
+        if (vote === "incorrect") unconfirmed += 1
+
+        return {
+          ...rep,
+          confirmedCount: confirmed,
+          unconfirmedCount: unconfirmed,
+        }
+      })
+
+      const updatedData: CommunityUpdateData = {
+        ...communityData,
+        reports: updatedReports,
+      }
+      handleUpdateCommunityData(updatedData)
+    } else {
+      notifyCommunitySync(shop.id)
+    }
+
+    showSnackbar({
+      title: T.feedbackRecorded,
+      type: "success",
+    })
+  }
+
+  const latestCommunityReport: CommunityReport | null =
+    communityData?.reports && communityData.reports.length > 0
+      ? communityData.reports[0]
+      : (shop as any).communityUpdate?.reports &&
+          (shop as any).communityUpdate.reports.length > 0
+        ? (shop as any).communityUpdate.reports[0]
+        : null
+
+  const effectiveLatestReport: CommunityReport | null =
+    latestCommunityReport ||
+    (communityData
+      ? {
+          id: `rep-latest-${shop.id}`,
+          userName: lang === "ar" ? "تحديث مجتمعي" : "Community Update",
+          isOpen: communityData.isOpen,
+          waitingCount: communityData.waitingCount,
+          time:
+            communityData.updatedAt ||
+            (shop as any).communityUpdate?.updatedAt ||
+            new Date().toISOString(),
+          note:
+            lang === "ar"
+              ? "تم تأكيد حالة الصالون بواسطة مساهمات زبائن اليوم."
+              : "Shop status confirmed by community contributions today.",
+          confirmedCount: communityData.openCount || 1,
+          unconfirmedCount: communityData.closedCount || 0,
+        }
+      : null)
 
   const effectiveCommunityUpdatedAt = isSimulatedYesterday
     ? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
@@ -202,6 +321,11 @@ export default function ShopDetail({
     !shop.isVerified &&
     !!effectiveCommunityUpdatedAt &&
     isToday(effectiveCommunityUpdatedAt)
+
+  // Has the user already voted (confirming or refuting) on the latest community report?
+  const hasVotedOnLatest = Boolean(
+    effectiveLatestReport && userVotes[effectiveLatestReport.id],
+  )
 
   const communityTimeFormatted = isCommunityActiveToday
     ? formatTimeHM(effectiveCommunityUpdatedAt, lang)
@@ -496,22 +620,53 @@ export default function ShopDetail({
         className="px-5 py-3 border-b border-[var(--border)] bg-[var(--card)] flex items-center justify-between"
         dir={dir}
       >
-        {/* Status badge and Community time if active (in place of where clock was) */}
-        <div className="flex items-center gap-2">
-          <StatusChip isOpen={currentIsOpen} lang={lang} />
+          {/* Status badge and Community time if active (in place of where clock was) */}
+          <div className="flex items-center gap-2">
+            <StatusChip isOpen={currentIsOpen} lang={lang} />
 
-          {/* Community status badge with time (HH:MM) - disappears next day */}
-          {isCommunityActiveToday && (
-            <Badge
-              variant="subtle"
-              size="sm"
-              className="gap-1 text-[11px] font-semibold text-[var(--primary)] border-[var(--primary)]/30 bg-[var(--primary)]/10"
-            >
-              <IconUsers size={12} />
-              <span>{T.communityUpdateWithTime(communityTimeFormatted)}</span>
-            </Badge>
-          )}
-        </div>
+            {/* Community Update Chip: Switches between "تحديث مجتمعي جديد" (unvoted) and "اخر تحديث 7:31م" (voted) */}
+            {isCommunityActiveToday && (
+              hasVotedOnLatest ? (
+                /* Already voted on this update: Reverted back to calm "اخر تحديث 7:31م" chip */
+                <button
+                  type="button"
+                  onClick={() => setIsLatestCommunitySheetOpen(true)}
+                  className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold text-[var(--muted-foreground)] hover:text-[var(--foreground)] border border-[var(--border)] bg-[var(--muted)]/40 hover:bg-[var(--muted)] active:scale-95 transition-all duration-200 cursor-pointer shadow-2xs select-none"
+                  title={
+                    lang === "ar"
+                      ? "انقر لعرض تفاصيل آخر تحديث مجتمعي"
+                      : "Click to view latest community update details"
+                  }
+                >
+                  <IconUsers
+                    size={13}
+                    className="text-[var(--primary)] shrink-0"
+                  />
+                  <span>{T.communityUpdateWithTime(communityTimeFormatted)}</span>
+                </button>
+              ) : (
+                /* Not voted yet: Pulsing "تحديث مجتمعي جديد" chip button that prompts user to vote */
+                <button
+                  type="button"
+                  onClick={() => setIsLatestCommunitySheetOpen(true)}
+                  className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold text-[var(--primary)] border border-[var(--primary)]/40 bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20 active:scale-95 transition-all duration-300 cursor-pointer shadow-xs animate-chip-pulse select-none"
+                  title={
+                    lang === "ar"
+                      ? "انقر للإدلاء برأيك في آخر تحديث مجتمعي"
+                      : "Click to vote on latest community update"
+                  }
+                >
+                  {/* Eye-catching live ping dot */}
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--primary)] opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--primary)]" />
+                  </span>
+                  <IconUsers size={13} className="shrink-0" />
+                  <span>{T.newCommunityUpdate}</span>
+                </button>
+              )
+            )}
+          </div>
 
         {/* Working Hours (on the other side of the same line) */}
         <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
@@ -1099,6 +1254,29 @@ export default function ShopDetail({
           dir={dir}
         />
       )}
+
+      {/* Latest Community Update Bottom Sheet */}
+      <LatestCommunityUpdateBottomSheet
+        open={isLatestCommunitySheetOpen}
+        onClose={() => setIsLatestCommunitySheetOpen(false)}
+        report={effectiveLatestReport}
+        shopName={shop.name}
+        shopNameAr={shop.nameAr}
+        lang={lang}
+        userVote={
+          effectiveLatestReport ? userVotes[effectiveLatestReport.id] : null
+        }
+        onVote={handleVote}
+        onViewAllUpdates={() => {
+          setIsLatestCommunitySheetOpen(false)
+          setHasDismissedCommunityNotification(true)
+          if (onOpenCommunity) {
+            onOpenCommunity(shop.id)
+          } else {
+            setIsCommunityOpen(true)
+          }
+        }}
+      />
     </div>
   )
 }

@@ -1,80 +1,49 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
 
-export type NotificationDotPresetColor =
-  | "rose"
-  | "primary"
-  | "emerald"
-  | "green"
-  | "success"
-  | "amber"
-  | "orange"
-  | "warning"
-  | "red"
-  | "destructive"
-  | "blue"
-  | "sky"
-  | "info"
-  | "purple"
-  | "violet"
-  | "zinc"
-  | "gray"
-  | "white"
+export type NotificationDotPresetColor = "rose" | "primary" | "emerald" | "green" | "success" | "amber" | "orange" | "warning" | "red" | "destructive" | "blue" | "sky" | "info" | "purple" | "violet" | "zinc" | "gray" | "white"
 
-export type NotificationDotColor = NotificationDotPresetColor | (string & {})
+export type NotificationDotColor = NotificationDotPresetColor | string & {}
 
 export type NotificationDotSize = "xs" | "sm" | "md" | "lg" | "xl"
 
 export type NotificationDotSpeed = "fast" | "normal" | "slow"
 
-export type NotificationDotPlacement =
-  | "top-right"
-  | "top-left"
-  | "bottom-right"
-  | "bottom-left"
-  | "top-end"
-  | "top-start"
-  | "bottom-end"
-  | "bottom-start"
-  | "center"
-  | "inline"
+export type NotificationDotPlacement = "top-right" | "top-left" | "bottom-right" | "bottom-left" | "top-end" | "top-start" | "bottom-end" | "bottom-start" | "center" | "inline"
 
 export interface NotificationDotProps
   extends React.HTMLAttributes<HTMLSpanElement> {
   /** Whether the notification dot is visible (defaults to true) */
-  visible?: boolean
   /** Whether to animate with pulse/radar effect (defaults to false - static) */
-  pulse?: boolean
   /** Optional badge count or text content (e.g. 2, '9+', etc.) */
-  count?: number | string
   /** Speed of pulse animation ('fast' | 'normal' | 'slow') */
-  speed?: NotificationDotSpeed
   /**
    * Color of the notification dot.
    * Defaults to 'rose' (matching the favorites heart badge: bg-rose-500).
    */
-  color?: NotificationDotColor
   /** Size preset of the dot */
-  size?: NotificationDotSize
   /** Relative placement when used inside a relative container or wrapping children */
-  placement?: NotificationDotPlacement
   /** Ring style for separation from backgrounds (optional) */
-  ringClassName?: string
   /** Custom background/color class override */
-  colorClassName?: string
   /** Container class if wrapping children */
-  containerClassName?: string
   /** Optional wrapped children */
+  visible?: boolean
+  pulse?: boolean
+  count?: number | string
+  speed?: NotificationDotSpeed
+  color?: NotificationDotColor
+  size?: NotificationDotSize
+  placement?: NotificationDotPlacement
+  ringClassName?: string
+  colorClassName?: string
+  containerClassName?: string
   children?: React.ReactNode
 }
 
-const presetColorMap: Record<
-  string,
-  {
-    bgClass: string
-    colorValue: string
-  }
-> = {
+const presetColorMap: Record<string, {
+  bgClass: string
+  colorValue: string
+}> = {
   rose: {
     bgClass: "bg-rose-500 text-white",
     colorValue: "#f43f5e",

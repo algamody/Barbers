@@ -19,3 +19,8 @@ export {
   QrScannerBottomSheet,
   type QrScannerBottomSheetProps,
 } from "./QrScannerBottomSheet"
+
+export {
+  LatestCommunityUpdateBottomSheet,
+  type LatestCommunityUpdateBottomSheetProps,
+} from "./LatestCommunityUpdateBottomSheet"

@@ -4,7 +4,7 @@ import L from "leaflet"
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png"
 import markerIcon from "leaflet/dist/images/marker-icon.png"
 import markerShadow from "leaflet/dist/images/marker-shadow.png"
-import { SHOPS } from "../data"
+import { SHOPS, notifyCommunitySync } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
 import { Badge, ShopCard } from "@/components/ui"
@@ -123,10 +123,7 @@ export default function MapScreen({
     setRecenterTrigger((prev) => prev + 1)
   }
 
-  const tileUrl =
-    theme === "dark"
-      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+  const tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
 
   return (
     <div
@@ -157,10 +154,19 @@ export default function MapScreen({
           style={{ width: "100%", height: "100%" }}
           attributionControl={false}
         >
-          <TileLayer url={tileUrl} />
+          <TileLayer
+            url={tileUrl}
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            maxZoom={19}
+            className={
+              theme === "dark" ? "brightness-[0.88] contrast-[1.05]" : ""
+            }
+          />
           <FitBounds />
           <MapController
-            selectedCoords={selected && COORDS[selected] ? COORDS[selected] : null}
+            selectedCoords={
+              selected && COORDS[selected] ? COORDS[selected] : null
+            }
             recenterTrigger={recenterTrigger}
             onMapClick={() => setSelected(null)}
           />
@@ -249,7 +255,60 @@ export default function MapScreen({
           onClose={() => setShowCommunitySheet(false)}
           lang={lang}
           shopName={lang === "ar" ? selectedShop.nameAr : selectedShop.name}
-          onSubmitSuccess={() => {
+          onSubmitSuccess={(newInput) => {
+            if (newInput && selectedShop) {
+              try {
+                let existingData: any = null
+                const saved = localStorage.getItem(
+                  `community_data_${selectedShop.id}`,
+                )
+                if (saved) existingData = JSON.parse(saved)
+                else
+                  existingData = (selectedShop as any).communityUpdate || {
+                    updatedAt: new Date().toISOString(),
+                    isOpen: true,
+                    waitingCount: 0,
+                    openCount: 0,
+                    closedCount: 0,
+                    reports: [],
+                  }
+
+                const newReport = {
+                  id: `rep-${Date.now()}`,
+                  userName:
+                    lang === "ar"
+                      ? "أنت (مساهم مجتمعي)"
+                      : "You (Community Member)",
+                  userAvatar:
+                    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&auto=format",
+                  isOpen: newInput.isOpen,
+                  waitingCount: newInput.waitingCount,
+                  time: new Date().toISOString(),
+                  note: newInput.note,
+                  photo: newInput.photo,
+                  confirmedCount: 1,
+                }
+
+                const updated = {
+                  updatedAt: new Date().toISOString(),
+                  isOpen: newInput.isOpen,
+                  waitingCount: newInput.waitingCount,
+                  openCount: newInput.isOpen
+                    ? (existingData.openCount || 0) + 1
+                    : existingData.openCount || 0,
+                  closedCount: !newInput.isOpen
+                    ? (existingData.closedCount || 0) + 1
+                    : existingData.closedCount || 0,
+                  reports: [newReport, ...(existingData.reports || [])],
+                }
+
+                localStorage.setItem(
+                  `community_data_${selectedShop.id}`,
+                  JSON.stringify(updated),
+                )
+                notifyCommunitySync(selectedShop.id)
+              } catch {}
+            }
             setShowCommunitySheet(false)
           }}
         />

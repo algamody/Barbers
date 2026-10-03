@@ -3,7 +3,7 @@ import { Card } from "./card"
 import { Badge } from "./badge"
 import { Rating } from "./rating"
 import { IconHeart, IconCheck, IconUsers } from "@tabler/icons-react"
-import { Shop, isCommunityStatusActive, formatTimeHM } from "@/data"
+import { Shop, isCommunityStatusActive, formatTimeHM, getStoredCommunityData, isToday } from "@/data"
 import { Lang, useT } from "@/i18n"
 import { cn } from "@/lib/utils"
 
@@ -36,6 +36,36 @@ export function ShopCard({
   const dir = dirProp || (lang === "ar" ? "rtl" : "ltr")
   const T = useT(lang)
 
+  const [liveCommunityData, setLiveCommunityData] = React.useState<any>(() => {
+    return getStoredCommunityData(shop.id) || shop.communityUpdate || null
+  })
+
+  React.useEffect(() => {
+    const syncData = () => {
+      setLiveCommunityData(
+        getStoredCommunityData(shop.id) || shop.communityUpdate || null,
+      )
+    }
+    syncData()
+    window.addEventListener("barbers_community_sync", syncData)
+    window.addEventListener("storage", syncData)
+    return () => {
+      window.removeEventListener("barbers_community_sync", syncData)
+      window.removeEventListener("storage", syncData)
+    }
+  }, [shop.id, shop.communityUpdate])
+
+  const isCommunityActive =
+    !shop.isVerified &&
+    !!liveCommunityData?.updatedAt &&
+    isToday(liveCommunityData.updatedAt)
+
+  const currentIsOpen = shop.isVerified
+    ? shop.isOpen
+    : isCommunityActive
+      ? (liveCommunityData?.isOpen ?? shop.isOpen)
+      : shop.isOpen
+
   return (
     <Card
       interactive
@@ -62,7 +92,7 @@ export function ShopCard({
         />
 
         {/* Top-Right Badges (Community Update) */}
-        {isCommunityStatusActive(shop) && (
+        {isCommunityActive && (
           <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 flex-wrap">
             <Badge
               variant="subtle"
@@ -75,14 +105,14 @@ export function ShopCard({
                 className="text-[var(--primary)]"
               />
               {T.communityUpdateWithTime(
-                formatTimeHM(shop.communityUpdate?.updatedAt, lang),
+                formatTimeHM(liveCommunityData?.updatedAt, lang),
               )}
             </Badge>
           </div>
         )}
 
         {/* Closed Overlay */}
-        {!shop.isOpen && (
+        {!currentIsOpen && (
           <div className="absolute inset-0 bg-black/60 backdrop-blur-[1.5px] flex items-center justify-center z-10 pointer-events-none">
             <span className="text-white text-base font-bold tracking-wide select-none drop-shadow-md">
               {T.closed}

@@ -1,7 +1,13 @@
 import { useState, useRef } from "react"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { Button, Card, CopyButton, showSnackbar, BackButton } from "@/components/ui"
+import {
+  Button,
+  Card,
+  CopyButton,
+  showSnackbar,
+  BackButton,
+} from "@/components/ui"
 import { BottomSheet } from "@/components/ui/bottom-sheet"
 import {
   IconSparkles,

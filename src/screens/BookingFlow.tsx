@@ -2,7 +2,11 @@ import { useState, useRef, useEffect, useMemo } from "react"
 import { SHOPS, StaffMember } from "../data"
 import { getC, Theme } from "../theme"
 import { Lang, useT } from "../i18n"
-import { PersonBooking, GroupBookingData, DraftBookingData } from "../types/booking"
+import {
+  PersonBooking,
+  GroupBookingData,
+  DraftBookingData,
+} from "../types/booking"
 import {
   Button,
   Card,
@@ -111,9 +115,8 @@ export default function BookingFlow({
     return lang === "ar" ? "محمد القمودي" : "Mohammed Algamody"
   })()
 
-  const [activeAddingPersonName, setActiveAddingPersonName] = useState<
-    string | null
-  >(addingPersonName || null)
+  const [activeAddingPersonName, setActiveAddingPersonName] =
+    useState<string | null>(addingPersonName || null)
 
   useEffect(() => {
     setActiveAddingPersonName(addingPersonName || null)
@@ -170,8 +173,7 @@ export default function BookingFlow({
                   ? currentUserName
                   : p.name || currentUserName,
               serviceId: serviceId || p.serviceId,
-              addonIds:
-                addonIds && addonIds.length > 0 ? addonIds : p.addonIds,
+              addonIds: addonIds && addonIds.length > 0 ? addonIds : p.addonIds,
             }
           : p,
       )

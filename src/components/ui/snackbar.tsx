@@ -259,71 +259,86 @@ export function Snackbar({
   }, [disablePortal])
 
   // Manage enter and exit animations
+  const [hasEntered, setHasEntered] = React.useState(false)
+  const cardRef = React.useRef<HTMLDivElement>(null)
+  const dismissTimerRef = React.useRef<NodeJS.Timeout | null>(null)
+
+  const isDraggingRef = React.useRef(false)
+  const [isDragging, setIsDragging] = React.useState(false)
+  const startYRef = React.useRef(0)
+  const currentYRef = React.useRef(0)
+  const startTimeRef = React.useRef(0)
+
+  const handleClose = React.useCallback(
+    (e?: React.MouseEvent) => {
+      e?.stopPropagation()
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+
+      if (cardRef.current) {
+        cardRef.current.style.transition =
+          "transform 0.24s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.2s ease-out"
+        const exitY = position === "top" ? -60 : 60
+        cardRef.current.style.transform = `translateY(${exitY}px) scale(0.95)`
+        cardRef.current.style.opacity = "0"
+      }
+
+      setIsClosing(true)
+      setTimeout(() => {
+        setRendered(false)
+        setIsClosing(false)
+        setHasEntered(false)
+        onClose?.()
+      }, 240)
+    },
+    [onClose, position],
+  )
+
+  // Auto-dismiss timer management
+  const startAutoDismiss = React.useCallback(() => {
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+    if (!open || !duration || duration <= 0) return
+
+    dismissTimerRef.current = setTimeout(() => {
+      handleClose()
+    }, duration)
+  }, [open, duration, handleClose])
+
   React.useEffect(() => {
     if (open) {
       setRendered(true)
       setIsClosing(false)
-      setDragOffset(0)
-      setIsThrowing(false)
+      setHasEntered(false)
+      startAutoDismiss()
     } else if (rendered) {
-      setIsClosing(true)
-      const timer = setTimeout(() => {
-        setRendered(false)
-        setIsClosing(false)
-      }, 280) // matches animate-snackbar-exit duration
-      return () => clearTimeout(timer)
+      handleClose()
     }
-  }, [open, rendered])
-
-  // Handle auto-dismiss timer
-  React.useEffect(() => {
-    if (!open || !duration || duration <= 0) return
-
-    const timer = setTimeout(() => {
-      setIsClosing(true)
-      const exitTimer = setTimeout(() => {
-        setRendered(false)
-        setIsClosing(false)
-        onClose?.()
-      }, 280)
-      return () => clearTimeout(exitTimer)
-    }, duration)
-
-    return () => clearTimeout(timer)
-  }, [open, duration, onClose])
+    return () => {
+      if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+    }
+  }, [open, rendered, startAutoDismiss, handleClose])
 
   // ----------------------------------------------------------------------
-  // Swipe / Drag Down to Dismiss Handling (سحب وإلقاء للأسفل للإلغاء)
+  // Real-Time iOS-Style Gesture Tracking (استجابة لحظية للسحب)
   // ----------------------------------------------------------------------
-  const [dragOffset, setDragOffset] = React.useState(0)
-  const [isDragging, setIsDragging] = React.useState(false)
-  const [isThrowing, setIsThrowing] = React.useState(false)
-
-  const startYRef = React.useRef(0)
-  const currentYRef = React.useRef(0)
-  const startTimeRef = React.useRef(0)
-  const isDraggingRef = React.useRef(false)
-
-  const handleClose = (e?: React.MouseEvent) => {
-    e?.stopPropagation()
-    setIsClosing(true)
-    setTimeout(() => {
-      setRendered(false)
-      setIsClosing(false)
-      setIsThrowing(false)
-      setDragOffset(0)
-      onClose?.()
-    }, 280)
-  }
-
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dismissible || isClosing || isThrowing) return
+    if (!dismissible || isClosing) return
     if (e.button !== 0) return // Left click or primary touch only
+
+    // Stop auto-dismiss while user is actively interacting
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+
+    isDraggingRef.current = true
+    setIsDragging(true)
+    setHasEntered(true) // Immediately detach any CSS animation so transform is 100% interactive
+
     startYRef.current = e.clientY
     currentYRef.current = e.clientY
     startTimeRef.current = Date.now()
-    isDraggingRef.current = true
-    setIsDragging(true)
+
+    if (cardRef.current) {
+      cardRef.current.style.transition = "none"
+      cardRef.current.style.willChange = "transform, opacity"
+    }
 
     try {
       e.currentTarget.setPointerCapture(e.pointerId)
@@ -331,20 +346,44 @@ export function Snackbar({
   }
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current) return
+    if (!isDraggingRef.current || !cardRef.current) return
     currentYRef.current = e.clientY
     const deltaY = e.clientY - startYRef.current
 
-    if (deltaY > 0) {
-      setDragOffset(deltaY)
+    let translateY = 0
+    let opacity = 1
+    let scale = 1
+
+    if (position === "top") {
+      if (deltaY < 0) {
+        // Dragging upwards to dismiss: 1:1 real-time tracking
+        translateY = deltaY
+        opacity = Math.max(0.15, 1 - Math.abs(deltaY) / 200)
+        scale = Math.max(0.92, 1 - Math.abs(deltaY) / 1000)
+      } else {
+        // Dragging downwards: rubber-band resistance
+        translateY = Math.pow(deltaY, 0.78) * 1.4
+      }
     } else {
-      // Gentle resistance for upwards drag
-      setDragOffset(deltaY * 0.2)
+      // Bottom positioned (standard for this app)
+      if (deltaY > 0) {
+        // Dragging downwards to dismiss: 1:1 real-time tracking
+        translateY = deltaY
+        opacity = Math.max(0.15, 1 - deltaY / 220)
+        scale = Math.max(0.92, 1 - deltaY / 1200)
+      } else {
+        // Dragging upwards: rubber-band resistance
+        translateY = -Math.pow(Math.abs(deltaY), 0.78) * 1.4
+      }
     }
+
+    // Direct instantaneous 60fps/120fps DOM update with zero latency
+    cardRef.current.style.transform = `translateY(${translateY}px) scale(${scale})`
+    cardRef.current.style.opacity = `${opacity}`
   }
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current) return
+    if (!isDraggingRef.current || !cardRef.current) return
     isDraggingRef.current = false
     setIsDragging(false)
 
@@ -353,29 +392,56 @@ export function Snackbar({
     } catch {}
 
     const deltaY = currentYRef.current - startYRef.current
-    const deltaTime = Date.now() - startTimeRef.current
-    const velocity = deltaY / Math.max(deltaTime, 1)
+    const deltaTime = Math.max(Date.now() - startTimeRef.current, 1)
+    const velocity = deltaY / deltaTime
 
-    // If dragged down past 40px or flicked downwards with speed > 0.4
-    if (deltaY > 40 || (deltaY > 15 && velocity > 0.4)) {
-      setIsThrowing(true)
+    const isBottom = position === "bottom"
+    const dismissDirection = isBottom ? deltaY > 0 : deltaY < 0
+    const absDelta = Math.abs(deltaY)
+    const absVelocity = Math.abs(velocity)
+
+    // Check if dismissed past threshold (50px) or flicked with momentum
+    if (
+      dismissDirection &&
+      (absDelta > 48 || (absDelta > 14 && absVelocity > 0.35))
+    ) {
+      // Smoothly continue downwards off-screen from current dragged position
+      const finalY = isBottom
+        ? Math.max(deltaY + 160, 220)
+        : Math.min(deltaY - 160, -220)
+
+      cardRef.current.style.transition =
+        "transform 0.22s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.18s ease-out"
+      cardRef.current.style.transform = `translateY(${finalY}px) scale(0.9)`
+      cardRef.current.style.opacity = "0"
+
+      setIsClosing(true)
       setTimeout(() => {
-        setIsClosing(true)
-        setTimeout(() => {
-          setRendered(false)
-          setIsClosing(false)
-          setIsThrowing(false)
-          setDragOffset(0)
-          onClose?.()
-        }, 200)
-      }, 150)
+        setRendered(false)
+        setIsClosing(false)
+        setHasEntered(false)
+        onClose?.()
+      }, 220)
     } else {
-      // Snap back smoothly
-      setDragOffset(0)
-      // If it was just a clean click/tap without dragging (< 5px)
-      if (Math.abs(deltaY) < 5 && onClick) {
+      // Fluid spring snap back (iOS-like bounce)
+      cardRef.current.style.transition =
+        "transform 0.34s cubic-bezier(0.175, 0.885, 0.32, 1.25), opacity 0.24s ease-out"
+      cardRef.current.style.transform = "translateY(0px) scale(1)"
+      cardRef.current.style.opacity = "1"
+
+      setTimeout(() => {
+        if (cardRef.current) {
+          cardRef.current.style.willChange = "auto"
+        }
+      }, 340)
+
+      // Clean tap detection (< 5px drag)
+      if (absDelta < 5 && onClick) {
         onClick()
       }
+
+      // Resume auto-dismiss timer
+      startAutoDismiss()
     }
   }
 
@@ -480,19 +546,6 @@ export function Snackbar({
   const positionStyles: React.CSSProperties =
     position === "bottom" ? { bottom: resolvedBottom } : { top: topOffset }
 
-  // Drag styles
-  const dragTransform = isThrowing
-    ? `translateY(${Math.max(dragOffset, 50) + 140}px) scale(0.92)`
-    : dragOffset !== 0
-      ? `translateY(${dragOffset}px)`
-      : undefined
-
-  const dragOpacity = isThrowing
-    ? 0
-    : dragOffset > 0
-      ? Math.max(0.1, 1 - dragOffset / 130)
-      : 1
-
   const content = (
     <div
       className="absolute left-4 right-4 z-[9999] pointer-events-none flex justify-center"
@@ -500,6 +553,7 @@ export function Snackbar({
       dir={dir}
     >
       <div
+        ref={cardRef}
         role="status"
         aria-live="polite"
         data-theme={isDark ? "dark" : "light"}
@@ -507,22 +561,18 @@ export function Snackbar({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        onAnimationEnd={() => setHasEntered(true)}
         className={cn(
-          "pointer-events-auto w-full max-w-[360px] rounded-2xl px-4 py-3.5 flex flex-col gap-1.5 border transition-all duration-200 select-none shadow-2xl",
+          "pointer-events-auto w-full max-w-[360px] rounded-2xl px-4 py-3.5 flex flex-col gap-1.5 border select-none shadow-2xl",
           isDark ? "dark" : "",
           currentStyle.container,
           onClick && !isDragging && "cursor-pointer",
           isDragging ? "cursor-grabbing" : "cursor-grab",
-          isClosing ? "animate-snackbar-exit" : "animate-snackbar-enter",
+          !hasEntered && !isDragging && !isClosing && "animate-snackbar-enter",
           className,
         )}
         style={{
           ...style,
-          transform: dragTransform,
-          opacity: dragOpacity,
-          transition: isDragging
-            ? "none"
-            : "transform 0.26s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.2s ease",
           touchAction: "none",
         }}
       >

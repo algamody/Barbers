@@ -246,6 +246,8 @@ export function AlertDialog({
               cancelText ? "flex-1" : "w-full",
               (type === "closed" || type === "error") &&
                 "bg-red-600 hover:bg-red-700 text-white shadow-red-600/20",
+              type === "success" &&
+                "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20",
             )}
           >
             {confirmText}
