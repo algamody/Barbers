@@ -8,7 +8,7 @@ interface LanguageContextValue {
   lang: Lang
   isRTL: boolean
   setLanguage: (lang: Lang) => Promise<void>
-  t: (key: string) => string
+  t: (key: string, options?: any) => string
 }
 
 const LanguageContext = createContext<LanguageContextValue | null>(null)

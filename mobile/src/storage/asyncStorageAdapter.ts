@@ -2,17 +2,24 @@ import AsyncStorage from "@react-native-async-storage/async-storage"
 import type { IStorageAdapter } from "./storage.interface"
 
 export class AsyncStorageAdapter implements IStorageAdapter {
-  async getItem(key: string): Promise<string | null> {
+  async getItem<T = unknown>(key: string): Promise<T | null> {
     try {
-      return await AsyncStorage.getItem(key)
+      const val = await AsyncStorage.getItem(key)
+      if (val === null) return null
+      try {
+        return JSON.parse(val) as T
+      } catch {
+        return val as unknown as T
+      }
     } catch {
       return null
     }
   }
 
-  async setItem(key: string, value: string): Promise<void> {
+  async setItem<T = unknown>(key: string, value: T): Promise<void> {
     try {
-      await AsyncStorage.setItem(key, value)
+      const stringValue = typeof value === "string" ? value : JSON.stringify(value)
+      await AsyncStorage.setItem(key, stringValue)
     } catch {}
   }
 

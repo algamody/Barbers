@@ -6,8 +6,10 @@ import { StatusBar } from "expo-status-bar"
 import { SafeAreaProvider } from "react-native-safe-area-context"
 import { ThemeProvider, useAppTheme } from "@/theme/ThemeContext"
 import { LanguageProvider } from "@/locals/LanguageContext"
+import { DirectionProvider } from "@/locals/DirectionProvider"
 import { ApiProvider } from "@/services/context/ApiContext"
 import { initialServices } from "@/services/initialServices"
+import { SnackbarHost } from "@/components/feedback/snackbar"
 
 function RootNavigator() {
   const { theme } = useAppTheme()
@@ -21,6 +23,7 @@ function RootNavigator() {
           animation: "fade",
         }}
       />
+      <SnackbarHost />
     </>
   )
 }
@@ -30,9 +33,11 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <LanguageProvider>
-          <ApiProvider services={initialServices}>
-            <RootNavigator />
-          </ApiProvider>
+          <DirectionProvider>
+            <ApiProvider services={initialServices}>
+              <RootNavigator />
+            </ApiProvider>
+          </DirectionProvider>
         </LanguageProvider>
       </ThemeProvider>
     </SafeAreaProvider>
